@@ -37,7 +37,6 @@ fun initKoin(
         networkPlatformModule,
         dataModule,
         syncModule,
-        // Feature ViewModel graphs (each in package com.mindset.di in its feature module):
         homeModule,
         loggingModule,
         templatesModule,

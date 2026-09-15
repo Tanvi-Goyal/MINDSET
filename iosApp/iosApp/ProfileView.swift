@@ -30,9 +30,6 @@ struct ProfileView: View {
                     }
                     .pickerStyle(.segmented)
                 }
-                Section("About") {
-                    NavigationLink("Open data & credits") { CreditsView() }
-                }
             }
             .navigationTitle("Profile")
         }

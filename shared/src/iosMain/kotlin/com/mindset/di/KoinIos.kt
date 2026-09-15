@@ -1,21 +1,14 @@
 package com.mindset.di
 
-import com.mindset.FlowSubscription
-import com.mindset.domain.MuscleImageProvider
-import com.mindset.domain.repository.SessionRepository
-import com.mindset.model.Exercise
-import com.mindset.model.MuscleDiagram
 import com.mindset.presentation.HistoryViewModel
 import com.mindset.presentation.HomeViewModel
+import com.mindset.presentation.LogTabViewModel
 import com.mindset.presentation.LogWorkoutViewModel
 import com.mindset.presentation.NewSessionViewModel
 import com.mindset.presentation.PreferencesViewModel
+import com.mindset.presentation.ProfileViewModel
 import com.mindset.presentation.SessionDetailViewModel
-import com.mindset.presentation.StatsViewModel
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
+import com.mindset.presentation.StationsViewModel
 import org.koin.core.parameter.parametersOf
 import org.koin.mp.KoinPlatform
 
@@ -29,15 +22,16 @@ fun doInitKoin() {
     initKoin(observability = appObservability)
 }
 
+fun homeViewModel(): HomeViewModel = KoinPlatform.getKoin().get()
+fun logTabViewModel(): LogTabViewModel = KoinPlatform.getKoin().get()
+fun stationsViewModel(): StationsViewModel = KoinPlatform.getKoin().get()
+fun profileViewModel(): ProfileViewModel = KoinPlatform.getKoin().get()
+fun historyViewModel(): HistoryViewModel = KoinPlatform.getKoin().get()
+
 /**
  * Resolve the shared [HistoryViewModel] for Swift. The ViewModel graph lives in `commonMain`; this
  * is the one Swift-callable seam that hands an instance across (Swift holds it in an ObservableObject).
  */
-fun historyViewModel(): HistoryViewModel = KoinPlatform.getKoin().get()
-
-fun homeViewModel(): HomeViewModel = KoinPlatform.getKoin().get()
-
-fun statsViewModel(): StatsViewModel = KoinPlatform.getKoin().get()
 
 fun preferencesViewModel(): PreferencesViewModel = KoinPlatform.getKoin().get()
 
@@ -50,20 +44,3 @@ fun sessionDetailViewModel(sessionId: String): SessionDetailViewModel = KoinPlat
 fun doNewSessionViewModel(): NewSessionViewModel = KoinPlatform.getKoin().get()
 
 fun logWorkoutViewModel(sessionId: String): LogWorkoutViewModel = KoinPlatform.getKoin().get { parametersOf(sessionId) }
-
-/**
- * Load the full exercise catalog for the iOS picker. The shared [ExerciseLibraryViewModel] exposes
- * `Flow<PagingData<Exercise>>` (Paging 3), which has no Swift consumer — so on iOS we read the
- * bounded catalog directly and filter client-side. Returns a [FlowSubscription] for cancellation.
- */
-fun loadExercises(onResult: (List<Exercise>) -> Unit): FlowSubscription {
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    scope.launch {
-        val catalog = KoinPlatform.getKoin().get<SessionRepository>().exercisesById()
-        onResult(catalog.values.toList())
-    }
-    return FlowSubscription(scope)
-}
-
-/** wger muscle diagram (base body + overlay URLs) for a muscle name; suspend → Swift async. Null if unmapped/offline. */
-suspend fun muscleDiagram(muscleName: String): MuscleDiagram? = KoinPlatform.getKoin().get<MuscleImageProvider>().diagram(muscleName)
