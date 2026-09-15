@@ -3,16 +3,27 @@ import Shared
 
 /// Home — an ordered list of widgets, rendered from `HomeStore.slots`.
 ///
-/// SwiftUI counterpart of `feature/home/src/androidMain/kotlin/com/mindset/HomeScreen.kt`. The
-/// Android version renders a 2-column `LazyVerticalGrid` where Race Goal and Performance take one
-/// cell each and every other widget spans the full width. SwiftUI's `LazyVGrid` has no per-item
-/// span, so the same layout is expressed by grouping consecutive compact widgets into an `HStack`.
+/// SwiftUI counterpart of `feature/home/src/androidMain/kotlin/com/mindset/HomeScreen.kt` and the
+/// card files beside it. Android lays these out in a 2-column `LazyVerticalGrid` where Race Goal and
+/// Performance take one cell each and everything else spans; SwiftUI's `LazyVGrid` has no per-item
+/// span, so consecutive compact widgets are grouped into an `HStack` instead.
 ///
-/// Note the `switch` below is exhaustive with no `default`. That is only possible because
-/// `HomeStore` already converted Kotlin's nested sealed interfaces into a Swift enum — see the long
-/// comment at the top of HomeStore.swift for why that conversion earns its keep.
+/// The `switch` is exhaustive with no `default`, which is only possible because `HomeStore` already
+/// converted Kotlin's nested sealed interfaces into a Swift enum.
+///
+/// A note on what is *not* a bug: with an empty database this screen shows three cards, not five.
+/// `HomeViewModel.raceGoalSlot()` emits nil when there is no upcoming race and `liveWorkoutSlot()`
+/// emits nil when nothing is running, and `listOfNotNull` drops both. Android behaves identically.
 struct HomeView: View {
+    private let onOpenProfile: (() -> Void)?
+
     @StateObject private var store = HomeStore()
+
+    // Explicit, because a `private` stored property (the @StateObject) would otherwise make the
+    // synthesized memberwise initializer private too — and ContentView needs to call it.
+    init(onOpenProfile: (() -> Void)? = nil) {
+        self.onOpenProfile = onOpenProfile
+    }
 
     var body: some View {
         NavigationStack {
@@ -22,23 +33,27 @@ struct HomeView: View {
                         if row.slots.count == 1, let slot = row.slots.first {
                             widget(for: slot)
                         } else {
-                            HStack(alignment: .top, spacing: Space.smd) {
+                            // Two equal columns, exactly like Compose's GridCells.Fixed(2).
+                            // An HStack of `.frame(maxWidth: .infinity)` children is NOT the same
+                            // thing: SwiftUI divides the space by each child's content flexibility,
+                            // so the Race Day and This Week cards end up different widths whenever
+                            // their text differs. `GridItem(.flexible())` divides the track evenly
+                            // and is the real analogue.
+                            LazyVGrid(columns: Self.compactColumns, alignment: .leading, spacing: Space.smd) {
                                 ForEach(row.slots) { slot in
                                     widget(for: slot)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                             }
                         }
                     }
                 }
                 .padding(.horizontal, Space.md)
-                .padding(.vertical, Space.sm)
+                .padding(.top, Space.sm)
+                .padding(.bottom, Space.md)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(Obsidian.background)
-            .navigationTitle("MindSet")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Obsidian.background, for: .navigationBar)
+            .mindSetToolbar(onOpenProfile: onOpenProfile)
         }
     }
 
@@ -62,17 +77,22 @@ struct HomeView: View {
         case .raceGoal(let title, let subtitle, let daysUntil):
             RaceGoalCard(title: title, subtitle: subtitle, daysUntil: daysUntil)
         case .performance(let sessionCount, let trainedDays, let today):
-            PerformanceCard(sessionCount: sessionCount, trainedDays: trainedDays, today: today)
+            WeeklyPerformanceCard(sessionCount: sessionCount, trainedDays: trainedDays, today: today)
         case .simulations(let sims):
-            SimulationSection(sims: sims)
+            SimulationRail(sims: sims)
         case .recentSessions(let sessions):
-            RecentSessionsCard(sessions: sessions)
+            RecentSessionsSection(sessions: sessions)
         case .unsupported:
             EmptyView()
         }
     }
 
-    /// Groups consecutive compact widgets into shared rows, preserving order.
+    /// `horizontalArrangement = Arrangement.spacedBy(spacing.smd)` on the Compose grid.
+    private static let compactColumns = [
+        GridItem(.flexible(), spacing: Space.smd, alignment: .top),
+        GridItem(.flexible(), spacing: Space.smd, alignment: .top),
+    ]
+
     private var rows: [WidgetRow] {
         var result: [WidgetRow] = []
         for slot in store.slots {
@@ -103,7 +123,32 @@ private extension HomeSlot {
     }
 }
 
-// MARK: - Cards
+// MARK: - Shared card chrome
+
+/// The top-right radial glow both compact cards carry, pulsing 0.6 ⇄ 0.3 over 2.1s.
+private struct AccentGlow: ViewModifier {
+    @State private var bright = false
+
+    func body(content: Content) -> some View {
+        content.background(
+            GeometryReader { geo in
+                RadialGradient(
+                    colors: [Obsidian.primary.opacity(bright ? 0.6 : 0.3), .clear],
+                    center: .topTrailing,
+                    startRadius: 0,
+                    endRadius: max(geo.size.width, geo.size.height) * 0.7
+                )
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 2.1).repeatForever(autoreverses: true)) {
+                        bright = true
+                    }
+                }
+            }
+        )
+    }
+}
+
+// MARK: - Race goal
 
 private struct RaceGoalCard: View {
     let title: String
@@ -111,161 +156,315 @@ private struct RaceGoalCard: View {
     let daysUntil: Int?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.sm) {
-            Label("RACE", systemImage: "flag.checkered")
-                .font(.caption2.weight(.semibold))
+        VStack(alignment: .leading, spacing: Space.xs) {
+            Text("RACE DAY")
+                .labelMediumStyle()
                 .foregroundStyle(Obsidian.primary)
             Text(title)
-                .font(.headline)
+                .font(MSFont.titleSmall)
                 .foregroundStyle(Obsidian.onSurface)
                 .lineLimit(2)
             Text(subtitle)
-                .font(.caption)
+                .font(MSFont.bodySmall)
                 .foregroundStyle(Obsidian.onSurfaceVariant)
-                .lineLimit(2)
+                .lineLimit(1)
             if let days = daysUntil {
-                HStack(alignment: .firstTextBaseline, spacing: Space.xs) {
+                Spacer().frame(height: Space.sm)
+                HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
                     Text("\(days)")
-                        .font(.system(size: 34, weight: .bold, design: .rounded))
-                        .foregroundStyle(Obsidian.primary)
-                    Text(days == 1 ? "day out" : "days out")
-                        .font(.caption)
+                        .font(MSFont.displaySmall)
+                        .foregroundStyle(Obsidian.onSurface)
+                    Text(days == 1 ? "DAY" : "DAYS")
+                        .labelMediumStyle()
                         .foregroundStyle(Obsidian.onSurfaceVariant)
                 }
             }
         }
-        .padding(Space.md)
+        .padding(.horizontal, Space.smd)
+        .padding(.vertical, Space.md)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .modifier(AccentGlow())
         .glassCard()
     }
 }
 
-private struct PerformanceCard: View {
+// MARK: - Weekly performance
+
+private struct WeeklyPerformanceCard: View {
     let sessionCount: Int
     let trainedDays: Set<Int64>
     let today: Int64
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.sm) {
-            Text("THIS WEEK")
-                .font(.caption2.weight(.semibold))
+        VStack(alignment: .leading, spacing: Space.xs) {
+            Text("This week".uppercased())
+                .labelMediumStyle()
                 .foregroundStyle(Obsidian.primary)
-            Text("\(sessionCount)")
-                .font(.system(size: 34, weight: .bold, design: .rounded))
+            Text(sessionCount == 1 ? "1 session" : "\(sessionCount) sessions")
+                .font(MSFont.bodyMedium)
                 .foregroundStyle(Obsidian.onSurface)
-            Text(sessionCount == 1 ? "session" : "sessions")
-                .font(.caption)
-                .foregroundStyle(Obsidian.onSurfaceVariant)
+            Spacer().frame(height: Space.xs)
 
-            // The last 7 days, oldest first. `trainedDays` is an epoch-day Set that was unboxed
-            // from Kotlin's `Set<Long>` in HomeStore — comparing raw Int64s here works precisely
-            // because that unboxing happened.
-            HStack(spacing: Space.xs) {
-                ForEach(weekDays, id: \.self) { day in
-                    Circle()
-                        .fill(trainedDays.contains(day) ? Obsidian.primary : Obsidian.glassBorder)
-                        .frame(width: 8, height: 8)
+            // Monday-first week of 7. Android computes this in core/ui's buildCalendarWeeks, which is
+            // an Android-only module, so the same UTC epoch-day arithmetic is repeated here.
+            //
+            // FlowLayout, not HStack — PerformanceCard.kt uses a FlowRow. Seven 30pt tiles cannot fit
+            // a half-width grid cell on a phone, so the strip has to wrap onto two or three lines;
+            // an HStack instead reports ~258pt as its minimum width and shoves the card out of its
+            // column. Spacing matches the Compose FlowRow: smd across, sm down.
+            FlowLayout(horizontalSpacing: Space.smd, verticalSpacing: Space.sm) {
+                ForEach(weekCells, id: \.epochDay) { cell in
+                    CalendarDayTile(cell: cell)
                 }
             }
-            .padding(.top, Space.xs)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(Space.md)
+        .padding(.horizontal, Space.smd)
+        .padding(.vertical, Space.md)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .modifier(AccentGlow())
         .glassCard()
     }
 
-    private var weekDays: [Int64] { (0..<7).map { today - Int64(6 - $0) } }
+    /// Epoch day 0 is a Thursday, so Monday index within the week is `((day % 7) + 3) % 7` — the same
+    /// expression `HomeViewModel.performanceLikeSlot` uses to find the current Monday.
+    private var weekCells: [DayCell] {
+        let mondayIndex = ((today % 7) + 3) % 7
+        let monday = today - mondayIndex
+        return (0..<7).map { offset in
+            let day = monday + Int64(offset)
+            let state: DayCell.State = day == today
+                ? .today
+                : (trainedDays.contains(day) ? .trained : .idle)
+            return DayCell(epochDay: day, state: state)
+        }
+    }
 }
 
-private struct SimulationSection: View {
+private struct DayCell {
+    enum State { case today, trained, idle }
+    let epochDay: Int64
+    let state: State
+
+    /// Day-of-month, in UTC — matching the Kotlin side, which does this arithmetic in UTC too.
+    var dayOfMonth: Int {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+        let date = Date(timeIntervalSince1970: Double(epochDay) * 86_400)
+        return calendar.component(.day, from: date)
+    }
+}
+
+/// `CalendarDayDot` from `core/ui/.../CalendarDayDot.kt` — a 30pt rounded square, not a dot, with a
+/// check badge overlapping the top-right corner on trained days.
+private struct CalendarDayTile: View {
+    let cell: DayCell
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Text("\(cell.dayOfMonth)")
+                .labelLargeStyle()
+                .fontWeight(cell.state == .today ? .bold : .regular)
+                .foregroundStyle(foreground)
+                .frame(width: 30, height: 30)
+                .background(background, in: RoundedRectangle(cornerRadius: Radius.sm))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Radius.sm)
+                        .strokeBorder(cell.state == .trained ? Obsidian.primary : .clear, lineWidth: 1)
+                )
+
+            if cell.state == .trained {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(Obsidian.onPrimary)
+                    .frame(width: 16, height: 16)
+                    .background(Obsidian.primary, in: Circle())
+                    .offset(x: 4, y: -4)
+            }
+        }
+        .frame(width: 30, height: 30)
+    }
+
+    private var background: Color {
+        switch cell.state {
+        case .today: return Obsidian.primary
+        case .trained: return Obsidian.primary.opacity(0.18)
+        case .idle: return Obsidian.glassFill
+        }
+    }
+
+    private var foreground: Color {
+        switch cell.state {
+        case .today: return Obsidian.onPrimary
+        case .trained: return Obsidian.onSurface
+        case .idle: return Obsidian.onSurfaceVariant
+        }
+    }
+}
+
+// MARK: - Simulations
+
+/// A horizontal rail of photo tiles. Note `SimulationEntry.flag` is *badge text* ("Official Sim" /
+/// "Half Sim"), not an emoji — the card art comes from the packaged photograph chosen by `type`.
+private struct SimulationRail: View {
     let sims: [SimCard]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.smd) {
-            Text("RACE SIMULATIONS")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(Obsidian.primary)
-            ForEach(sims) { sim in
-                HStack(alignment: .center, spacing: Space.smd) {
-                    Text(sim.flag).font(.title2)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(sim.title)
-                            .font(.subheadline.bold())
-                            .foregroundStyle(Obsidian.onSurface)
-                        Text(sim.subtitle)
-                            .font(.caption)
-                            .foregroundStyle(Obsidian.onSurfaceVariant)
-                        if !sim.tags.isEmpty {
-                            Text(sim.tags.joined(separator: " • "))
-                                .font(.caption2)
-                                .foregroundStyle(Obsidian.outline)
-                        }
+        VStack(alignment: .leading, spacing: Space.md) {
+            SectionHeader(title: "Simulations")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: Space.smd) {
+                    ForEach(sims) { sim in
+                        SimulationTile(sim: sim)
                     }
-                    Spacer(minLength: 0)
-                    Text(sim.isFullRace ? "FULL" : "HALF")
-                        .font(.caption2.bold())
-                        .foregroundStyle(Obsidian.coral)
                 }
-                .padding(Space.md)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .glassCard()
+                .padding(.trailing, Space.xs)
             }
         }
     }
 }
 
-private struct RecentSessionsCard: View {
+private struct SimulationTile: View {
+    let sim: SimCard
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            Image(sim.isFullRace ? "template_full_hyrox" : "template_hyrox_sim")
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 264, height: 200)
+                .clipped()
+
+            // Bottom-anchored scrim so the text keeps contrast whatever the photograph does.
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: Obsidian.surfaceContainerLowest.opacity(0.4), location: 0.5),
+                    .init(color: Obsidian.surfaceContainerLowest, location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            VStack(alignment: .leading, spacing: Space.sm) {
+                Text(sim.flag.uppercased())
+                    .labelSmallStyle()
+                    .foregroundStyle(Obsidian.onPrimary)
+                    .padding(.horizontal, Space.sm)
+                    .padding(.vertical, 2)
+                    .background(Obsidian.primaryContainer, in: RoundedRectangle(cornerRadius: Radius.xs))
+
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    Text(sim.title)
+                        .font(MSFont.titleMedium)
+                        .foregroundStyle(Obsidian.onSurface)
+                        .lineLimit(2)
+                    Text(sim.subtitle)
+                        .font(MSFont.bodySmall)
+                        .foregroundStyle(Obsidian.onSurfaceVariant)
+                        .lineLimit(1)
+                }
+
+                HStack(spacing: Space.sm) {
+                    ForEach(sim.tags, id: \.self) { tag in
+                        Text(tag.uppercased())
+                            .labelSmallStyle()
+                            .foregroundStyle(Obsidian.floatingTagText)
+                            .padding(.horizontal, Space.sm)
+                            .padding(.vertical, Space.xs)
+                            .background(Obsidian.surfaceContainerHigh.opacity(0.8), in: Capsule())
+                    }
+                }
+            }
+            .padding(Space.md)
+        }
+        .frame(width: 264, height: 200)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+    }
+}
+
+// MARK: - Recent sessions
+
+/// Not a single card: a section header plus one glass row per session, matching
+/// `RecentSessionsCard.kt` + `core/ui/.../SessionRow.kt`.
+private struct RecentSessionsSection: View {
     let sessions: [RecentSession]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.smd) {
-            Text("RECENT SESSIONS")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(Obsidian.primary)
+        VStack(alignment: .leading, spacing: Space.md) {
+            SectionHeader(title: "Recent Sessions") {
+                Text("See all")
+                    .labelLargeStyle()
+                    .foregroundStyle(Obsidian.primary)
+            }
 
             if sessions.isEmpty {
-                Text("No sessions logged yet.")
-                    .font(.footnote)
-                    .foregroundStyle(Obsidian.onSurfaceVariant)
+                HomePlaceholder(message: "No sessions yet. Start your first one.")
             } else {
-                ForEach(sessions) { session in
-                    HStack(alignment: .center) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(session.name)
-                                .font(.subheadline.bold())
-                                .foregroundStyle(Obsidian.onSurface)
-                            Text(Format.relativeDate(session.startedAtMillis))
-                                .font(.caption2)
-                                .foregroundStyle(Obsidian.onSurfaceVariant)
-                        }
-                        Spacer(minLength: Space.sm)
-                        VStack(alignment: .trailing, spacing: 2) {
-                            if let seconds = session.durationSec {
-                                // Reuses the SHARED formatter (core/domain/TimeText.kt) rather than
-                                // reimplementing mm:ss in Swift — same output as Android, by construction.
-                                Text(TimeTextKt.formatClockSec(sec: Int64(seconds)))
-                                    .font(.footnote.bold().monospacedDigit())
-                                    .foregroundStyle(Obsidian.onSurface)
-                            }
-                            if session.volumeKg > 0 {
-                                Text(Format.weight(session.volumeKg, .kg))
-                                    .font(.caption2)
-                                    .foregroundStyle(Obsidian.outline)
-                            }
-                        }
-                    }
-                    .padding(.vertical, Space.sm)
-                    if session.id != sessions.last?.id {
-                        Rectangle().fill(Obsidian.glassBorder).frame(height: 1)
+                VStack(spacing: 0) {
+                    ForEach(sessions) { session in
+                        SessionRow(session: session)
                     }
                 }
             }
         }
-        .padding(Space.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard()
     }
 }
+
+private struct SessionRow: View {
+    let session: RecentSession
+
+    var body: some View {
+        HStack(spacing: Space.md) {
+            Image(systemName: session.typeSymbol)
+                .font(.system(size: 16))
+                .foregroundStyle(Obsidian.onSurfaceVariant)
+                .frame(width: 16, height: 16)
+                .padding(Space.sm)
+                .background(Obsidian.secondaryContainer, in: Circle())
+
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text(session.name)
+                    .font(MSFont.bodyMedium.weight(.bold))
+                    .foregroundStyle(Obsidian.onSurface)
+                    .lineLimit(1)
+                Text(Format.relativeDay(session.startedAtMillis))
+                    .labelMediumStyle()
+                    .foregroundStyle(Obsidian.onSurfaceVariant)
+            }
+
+            Spacer(minLength: Space.sm)
+
+            if let seconds = session.durationSec, seconds > 0 {
+                Text(Format.duration(seconds))
+                    .font(MSFont.bodyMedium)
+                    .foregroundStyle(Obsidian.onSurface)
+            }
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Obsidian.onSurfaceVariant)
+                .frame(width: 32, height: 32)
+        }
+        .padding(Space.md)
+        .glassCard()
+        .padding(.vertical, Space.xs)
+    }
+}
+
+private extension RecentSession {
+    /// `typeIcon` in SessionRow.kt: conditioning → run, hyrox → lightning, mixed → bolt, else dumbbell.
+    var typeSymbol: String {
+        switch typeName {
+        case "CONDITIONING": return "figure.run"
+        case "HYROX": return "bolt.fill"
+        case "MIXED": return "bolt.horizontal.fill"
+        default: return "dumbbell.fill"
+        }
+    }
+}
+
+// MARK: - Live workout
 
 private struct LiveWorkoutCard: View {
     let workout: ActiveWorkoutSnapshot
@@ -278,56 +477,36 @@ private struct LiveWorkoutCard: View {
         VStack(alignment: .leading, spacing: Space.smd) {
             HStack {
                 Text("LIVE")
-                    .font(.caption2.bold())
+                    .labelSmallStyle()
                     .foregroundStyle(Obsidian.onPrimary)
                     .padding(.horizontal, Space.sm)
                     .padding(.vertical, 2)
                     .background(Obsidian.primary, in: Capsule())
                 Spacer()
                 Text("Step \(workout.stepNumber) of \(workout.totalSteps)")
-                    .font(.caption)
+                    .labelMediumStyle()
                     .foregroundStyle(Obsidian.onSurfaceVariant)
             }
 
             Text(workout.title)
-                .font(.headline)
+                .font(MSFont.titleMedium)
                 .foregroundStyle(Obsidian.onSurface)
 
-            // Total and split are both driven by ActiveWorkoutController in commonMain — the
-            // stopwatch itself is shared Kotlin; this view only renders it.
+            // The stopwatch and split tracking are ActiveWorkoutController in commonMain — this only
+            // renders them, and the clock formatter is shared too (core/domain/TimeText.kt).
             HStack(alignment: .firstTextBaseline, spacing: Space.md) {
                 Text(TimeTextKt.formatClockSec(sec: workout.totalElapsedMs / 1000))
-                    .font(.system(size: 32, weight: .bold, design: .rounded).monospacedDigit())
-                    .foregroundStyle(Obsidian.onSurface)
+                    .font(MSFont.displaySmall.monospacedDigit())
+                    .foregroundStyle(workout.paused ? Obsidian.onSurfaceVariant : Obsidian.onSurface)
                 Text("split " + TimeTextKt.formatClockSec(sec: workout.splitElapsedMs / 1000))
-                    .font(.footnote.monospacedDigit())
-                    .foregroundStyle(Obsidian.onSurfaceVariant)
+                    .font(MSFont.bodySmall.monospacedDigit())
+                    .foregroundStyle(workout.paused ? Obsidian.error : Obsidian.primary)
             }
 
             HStack(spacing: Space.sm) {
-                Button(action: onTogglePause) {
-                    Label(workout.paused ? "Resume" : "Pause",
-                          systemImage: workout.paused ? "play.fill" : "pause.fill")
-                        .font(.footnote.bold())
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(Obsidian.primary)
-
-                Button(action: onNext) {
-                    Label("Next", systemImage: "forward.fill")
-                        .font(.footnote.bold())
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .tint(Obsidian.onSurfaceVariant)
-
-                Button(action: onReset) {
-                    Image(systemName: "arrow.counterclockwise")
-                        .font(.footnote.bold())
-                }
-                .buttonStyle(.bordered)
-                .tint(Obsidian.outline)
+                PrimaryButton(title: workout.paused ? "Resume" : "Pause", action: onTogglePause)
+                SecondaryButton(title: "Next", action: onNext)
+                SecondaryButton(title: "Reset", action: onReset)
             }
         }
         .padding(Space.md)
@@ -342,7 +521,7 @@ private struct HomePlaceholder: View {
 
     var body: some View {
         Text(message)
-            .font(.footnote)
+            .font(MSFont.bodySmall)
             .foregroundStyle(Obsidian.onSurfaceVariant)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Space.md)

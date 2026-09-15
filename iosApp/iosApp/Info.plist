@@ -4,5 +4,13 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<!-- Without a launch screen key iOS paints plain white before any SwiftUI code runs, which
+	     read as a white flash ahead of the dark app. UIColorName points at the Obsidian ground
+	     (#131313) in the asset catalog, so the launch image is already the app's background. -->
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
 </dict>
 </plist>

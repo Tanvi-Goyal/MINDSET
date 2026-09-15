@@ -73,6 +73,7 @@ kotlin {
             export(projects.feature.history)
             export(projects.feature.stations)
             export(projects.feature.profile)
+            export(projects.feature.onboarding)
         }
     }
 
@@ -113,8 +114,9 @@ kotlin {
             api(projects.feature.logging)
             api(projects.feature.templates)
             api(projects.feature.home)
-            // Onboarding VM graph. `api` for Koin aggregation in Modules.kt; not exported to the iOS
-            // framework (Android-first per the port-later decision) — add export(...) when iOS parity lands.
+            // Onboarding VM graph. `api` for Koin aggregation in Modules.kt, and exported above: iOS
+            // drives first-run setup from the same OnboardingViewModel, whose onComplete() writes the
+            // athlete profile, the RaceGoal and the race config that Home and Stations both read.
             api(projects.feature.onboarding)
             // Room RUNTIME stays: the repository + sync engine + iosTest still call useWriterConnection /
             // Room.inMemoryDatabaseBuilder. Only the Room *plugin*/KSP/schemas moved to :core:database.

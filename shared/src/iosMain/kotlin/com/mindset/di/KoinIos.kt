@@ -4,6 +4,7 @@ import com.mindset.presentation.HistoryViewModel
 import com.mindset.presentation.HomeViewModel
 import com.mindset.presentation.LogTabViewModel
 import com.mindset.presentation.LogWorkoutViewModel
+import com.mindset.presentation.OnboardingViewModel
 import com.mindset.presentation.NewSessionViewModel
 import com.mindset.presentation.PreferencesViewModel
 import com.mindset.presentation.ProfileViewModel
@@ -26,6 +27,13 @@ fun homeViewModel(): HomeViewModel = KoinPlatform.getKoin().get()
 fun logTabViewModel(): LogTabViewModel = KoinPlatform.getKoin().get()
 fun stationsViewModel(): StationsViewModel = KoinPlatform.getKoin().get()
 fun profileViewModel(): ProfileViewModel = KoinPlatform.getKoin().get()
+
+/**
+ * First-run setup. [OnboardingViewModel.onComplete] is the one call that makes both iOS tabs useful:
+ * it saves the athlete profile, creates the upcoming RaceGoal (Home's countdown widget) and writes
+ * the division/gender/race-mode preferences (without which StationsViewModel returns an empty board).
+ */
+fun onboardingViewModel(): OnboardingViewModel = KoinPlatform.getKoin().get()
 fun historyViewModel(): HistoryViewModel = KoinPlatform.getKoin().get()
 
 /**

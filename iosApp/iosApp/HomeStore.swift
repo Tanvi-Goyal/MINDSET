@@ -52,6 +52,9 @@ struct SimCard: Identifiable {
 struct RecentSession: Identifiable {
     let id: String
     let name: String
+    /// The Kotlin `SessionType` constant name — carried as a String so the view can pick an icon
+    /// without naming Obj-C enum entries.
+    let typeName: String
     let startedAtMillis: Int64
     let volumeKg: Double
     let durationSec: Int?
@@ -181,6 +184,7 @@ final class HomeStore: ObservableObject {
                 RecentSession(
                     id: session.id,
                     name: session.name,
+                    typeName: session.type.name,
                     // `Session` leaks the domain type, whose timestamps are the *stdlib*
                     // `kotlin.time.Instant` (not kotlinx-datetime). It bridges as an opaque class,
                     // NOT a Foundation `Date` — so convert explicitly at the seam.

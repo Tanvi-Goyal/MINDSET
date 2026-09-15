@@ -9,7 +9,15 @@ import Shared
 /// no unit conversion and no business rules. Both platforms render byte-identical strings because
 /// they are produced by the same Kotlin.
 struct StationsView: View {
+    private let onOpenProfile: (() -> Void)?
+
     @StateObject private var store = StationsStore()
+
+    /// Explicit for the same reason as HomeView's: the private @StateObject would privatise the
+    /// synthesized memberwise initializer.
+    init(onOpenProfile: (() -> Void)? = nil) {
+        self.onOpenProfile = onOpenProfile
+    }
 
     var body: some View {
         NavigationStack {
@@ -41,9 +49,7 @@ struct StationsView: View {
                 .padding(.bottom, Space.md)
             }
             .background(Obsidian.background)
-            .navigationTitle("Stations")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Obsidian.background, for: .navigationBar)
+            .mindSetToolbar(onOpenProfile: onOpenProfile)
         }
     }
 }
