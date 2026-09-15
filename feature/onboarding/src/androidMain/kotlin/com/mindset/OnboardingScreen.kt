@@ -8,11 +8,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,10 +24,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -35,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mindset.components.FieldLabel
@@ -42,7 +51,10 @@ import com.mindset.components.GlassCard
 import com.mindset.components.GlassTextField
 import com.mindset.components.PrimaryButton
 import com.mindset.components.SecondaryButton
+import com.mindset.domain.HeightUnit
+import com.mindset.icons.ChevronRight
 import com.mindset.model.Gender
+import com.mindset.model.RaceCity
 import com.mindset.model.RaceMode
 import com.mindset.model.Tier
 import com.mindset.presentation.OnboardingStep
@@ -52,6 +64,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 @Composable
 fun OnboardingScreen(
@@ -173,24 +186,53 @@ private fun AthleteProfileStep(state: OnboardingUiState, vm: OnboardingViewModel
             placeholder = "e.g. Alex Sterling",
         )
         Spacer(Modifier.height(MaterialTheme.spacing.md))
-        Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)) {
-            StepperField(
-                label = "Bodyweight (kg)",
-                value = state.bodyweightKg,
-                onValueChange = vm::onBodyweight,
-                onDecrement = { vm.stepBodyweight(-1) },
-                onIncrement = { vm.stepBodyweight(+1) },
-                modifier = Modifier.weight(1f),
-            )
 
-            StepperField(
-                label = "Height (in)",
-                value = state.heightIn,
-                onValueChange = vm::onHeight,
-                onDecrement = { vm.stepHeight(-1) },
-                onIncrement = { vm.stepHeight(+1) },
-                modifier = Modifier.weight(1f),
-            )
+        StepperField(
+            label = "Bodyweight (kg)",
+            value = state.bodyweightKg,
+            onValueChange = vm::onBodyweight,
+            onDecrement = { vm.stepBodyweight(-1) },
+            onIncrement = { vm.stepBodyweight(+1) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(MaterialTheme.spacing.md))
+
+        FieldLabel("Height")
+        SegmentedSelector(
+            options = listOf("ft / in", "cm"),
+            selectedIndex = state.heightUnit.ordinal,
+            onSelect = { vm.onHeightUnit(HeightUnit.entries[it]) },
+        )
+        Spacer(Modifier.height(MaterialTheme.spacing.sm))
+        Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)) {
+            when (state.heightUnit) {
+                HeightUnit.FT_IN -> {
+                    com.mindset.components.StepperField(
+                        value = state.heightFt,
+                        onValueChange = vm::onHeightFt,
+                        onStep = vm::stepHeightFt,
+                        caption = "Feet",
+                        modifier = Modifier.weight(1f),
+                    )
+                    com.mindset.components.StepperField(
+                        value = state.heightInches,
+                        onValueChange = vm::onHeightInches,
+                        onStep = vm::stepHeightInches,
+                        caption = "Inches",
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+
+                HeightUnit.CM -> {
+                    com.mindset.components.StepperField(
+                        value = state.heightCm,
+                        onValueChange = vm::onHeightCm,
+                        onStep = vm::stepHeightCm,
+                        caption = "Centimetres",
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
         }
     }
 }
@@ -198,24 +240,37 @@ private fun AthleteProfileStep(state: OnboardingUiState, vm: OnboardingViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RaceConfigStep(state: OnboardingUiState, vm: OnboardingViewModel) {
-    val colors = MaterialTheme.colorScheme
     var showDatePicker by remember { mutableStateOf(false) }
+    var showCityPicker by remember { mutableStateOf(false) }
 
     Column {
         StepHeading("Race Configuration", "Set your sights on the finish line.")
 
-        FieldLabel("Competition Date")
-        GlassCard(onClick = { showDatePicker = true }) {
-            Text(
-                text = state.raceDateMillis?.let(::formatDate) ?: "mm / dd / yyyy",
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (state.raceDateMillis != null) {
-                    colors.onSurface
-                } else {
-                    colors.onSurfaceVariant.copy(alpha = 0.6f)
-                },
+        if (state.manualRaceEntry) {
+            FieldLabel("Target Race City")
+            GlassTextField(
+                value = state.raceCity,
+                onValueChange = vm::onCity,
+                placeholder = "e.g., Stockholm",
             )
+            LinkButton("Pick from the race calendar", vm::onUseCalendar)
+        } else {
+            FieldLabel("Target Race")
+            PickerRow(
+                text = state.selectedCity?.label ?: "Find your race",
+                isPlaceholder = state.selectedCity == null,
+                onClick = { showCityPicker = true },
+            )
+            LinkButton("My race isn't listed", vm::onManualRaceEntry)
         }
+        Spacer(Modifier.height(MaterialTheme.spacing.md))
+
+        FieldLabel("Race Day")
+        RaceDayField(
+            state = state,
+            onPickManualDate = { showDatePicker = true },
+            onSelectDay = vm::onRaceDaySelected,
+        )
         Spacer(Modifier.height(MaterialTheme.spacing.md))
 
         FieldLabel("Category")
@@ -240,18 +295,31 @@ private fun RaceConfigStep(state: OnboardingUiState, vm: OnboardingViewModel) {
             selectedIndex = state.raceMode?.ordinal ?: -1,
             onSelect = { vm.onFormat(RaceMode.entries[it]) },
         )
-        Spacer(Modifier.height(MaterialTheme.spacing.md))
+    }
 
-        FieldLabel("Target Race City")
-        GlassTextField(
-            value = state.raceCity,
-            onValueChange = vm::onCity,
-            placeholder = "e.g., Stockholm",
+    if (showCityPicker) {
+        CityPickerSheet(
+            cities = state.cities,
+            onDismiss = { showCityPicker = false },
+            onSelect = {
+                vm.onCitySelected(it)
+                showCityPicker = false
+            },
         )
     }
 
     if (showDatePicker) {
-        val pickerState = rememberDatePickerState(initialSelectedDateMillis = state.raceDateMillis)
+        // Manual entry only. A race you are training *for* cannot be in the past, so past days are
+        // not selectable at all rather than rejected after the fact.
+        val today = state.todayUtcMillis
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = state.raceDateMillis,
+            selectableDates = remember(today) {
+                object : SelectableDates {
+                    override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis >= today
+                }
+            },
+        )
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
@@ -267,6 +335,153 @@ private fun RaceConfigStep(state: OnboardingUiState, vm: OnboardingViewModel) {
             },
         ) {
             DatePicker(state = pickerState)
+        }
+    }
+}
+
+/**
+ * The Race Day field has four shapes, because how the date is chosen depends entirely on what the
+ * calendar knows about the selected city: hand-entered, not-yet-answerable, already decided, or a
+ * short list of the days that city actually races.
+ */
+@Composable
+private fun RaceDayField(state: OnboardingUiState, onPickManualDate: () -> Unit, onSelectDay: (Long) -> Unit) {
+    val days = state.availableRaceDays
+    when {
+        state.manualRaceEntry ->
+            PickerRow(
+                text = state.raceDateMillis?.let(::formatDate) ?: "mm / dd / yyyy",
+                isPlaceholder = state.raceDateMillis == null,
+                onClick = onPickManualDate,
+            )
+
+        state.selectedCity == null ->
+            PickerRow(text = "Choose your race first", isPlaceholder = true, onClick = null)
+
+        // One possible day — already filled in by the ViewModel, so just show it.
+        days.size == 1 ->
+            PickerRow(text = state.raceDateMillis?.let(::formatDate) ?: "—", isPlaceholder = false, onClick = null)
+
+        // A race weekend spans several days of heats; the athlete picks the one they're racing.
+        else ->
+            Column(verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
+                days.forEach { day ->
+                    DayOption(
+                        label = formatDate(day),
+                        selected = day == state.raceDateMillis,
+                        onClick = { onSelectDay(day) },
+                    )
+                }
+            }
+    }
+}
+
+@Composable
+private fun DayOption(label: String, selected: Boolean, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val shape = MaterialTheme.shapes.medium
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(if (selected) colors.primary.copy(alpha = 0.16f) else GlassFill)
+            .border(1.dp, if (selected) colors.primary else GlassBorder, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = MaterialTheme.spacing.md, vertical = MaterialTheme.spacing.smd),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (selected) colors.primary else colors.onSurface,
+        )
+    }
+}
+
+/** A tappable glass row that opens a picker, with the chevron affordance. */
+@Composable
+private fun PickerRow(text: String, isPlaceholder: Boolean, onClick: (() -> Unit)?) {
+    val colors = MaterialTheme.colorScheme
+    GlassCard(onClick = onClick) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (isPlaceholder) colors.onSurfaceVariant.copy(alpha = 0.6f) else colors.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (onClick != null) {
+                Icon(
+                    imageVector = MindSetIcons.ChevronRight,
+                    contentDescription = null,
+                    tint = colors.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+    }
+}
+
+/** A low-emphasis inline action — used for the two escape hatches under the race field. */
+@Composable
+private fun LinkButton(text: String, onClick: () -> Unit) {
+    TextButton(onClick = onClick) {
+        Text(text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+/**
+ * Searchable list of every place on the calendar with an upcoming race. Backed entirely by the
+ * database, so it works with no connectivity — the bundled calendar is always there.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CityPickerSheet(cities: List<RaceCity>, onDismiss: () -> Unit, onSelect: (RaceCity) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    var query by remember { mutableStateOf("") }
+    val filtered = remember(cities, query) {
+        if (query.isBlank()) cities else cities.filter { it.label.contains(query.trim(), ignoreCase = true) }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = colors.surfaceContainerLow,
+    ) {
+        Column(
+            Modifier
+                .fillMaxHeight(0.85f)
+                .padding(horizontal = MaterialTheme.spacing.lg),
+        ) {
+            Text(
+                "Find your race",
+                style = MaterialTheme.typography.headlineSmall,
+                color = colors.onSurface,
+            )
+            Spacer(Modifier.height(MaterialTheme.spacing.md))
+            GlassTextField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = "Search city or country",
+            )
+            Spacer(Modifier.height(MaterialTheme.spacing.md))
+
+            if (filtered.isEmpty()) {
+                Text(
+                    if (cities.isEmpty()) "No races on the calendar yet." else "No race matches \"$query\".",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurfaceVariant,
+                )
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
+                    items(filtered, key = { it.label }) { city ->
+                        PickerRow(text = city.label, isPlaceholder = false, onClick = { onSelect(city) })
+                    }
+                }
+            }
+            Spacer(Modifier.height(MaterialTheme.spacing.lg))
         }
     }
 }
@@ -343,5 +558,12 @@ private fun SegmentedSelector(options: List<String>, selectedIndex: Int, onSelec
     }
 }
 
+/**
+ * Race dates are epoch millis at **UTC midnight** (what both the calendar and M3's DatePicker
+ * produce), so the formatter must read them in UTC too — formatting in the device zone renders the
+ * previous day anywhere west of Greenwich. Same reason `WeekCalendar` pins UTC.
+ */
 private fun formatDate(millis: Long): String =
-    SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(millis))
+    SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+        .apply { timeZone = TimeZone.getTimeZone("UTC") }
+        .format(Date(millis))

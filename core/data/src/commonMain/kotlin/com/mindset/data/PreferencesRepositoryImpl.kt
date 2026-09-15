@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.mindset.domain.HeightUnit
 import com.mindset.domain.ThemeMode
 import com.mindset.domain.UserPreferences
 import com.mindset.domain.WeightUnit
@@ -22,6 +23,10 @@ class PreferencesRepositoryImpl(private val dataStore: DataStore<Preferences>) :
             prefs[Keys.WEIGHT_UNIT]
                 ?.let { runCatching { WeightUnit.valueOf(it) }.getOrNull() }
                 ?: WeightUnit.KG,
+            heightUnit =
+            prefs[Keys.HEIGHT_UNIT]
+                ?.let { runCatching { HeightUnit.valueOf(it) }.getOrNull() }
+                ?: HeightUnit.FT_IN,
             themeMode =
             prefs[Keys.THEME_MODE]
                 ?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
@@ -42,6 +47,10 @@ class PreferencesRepositoryImpl(private val dataStore: DataStore<Preferences>) :
 
     override suspend fun setWeightUnit(unit: WeightUnit) {
         dataStore.edit { it[Keys.WEIGHT_UNIT] = unit.name }
+    }
+
+    override suspend fun setHeightUnit(unit: HeightUnit) {
+        dataStore.edit { it[Keys.HEIGHT_UNIT] = unit.name }
     }
 
     override suspend fun setThemeMode(mode: ThemeMode) {
@@ -71,6 +80,7 @@ class PreferencesRepositoryImpl(private val dataStore: DataStore<Preferences>) :
 
     private object Keys {
         val WEIGHT_UNIT = stringPreferencesKey("weight_unit")
+        val HEIGHT_UNIT = stringPreferencesKey("height_unit")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
         val HYROX_DIVISION_KEY = stringPreferencesKey("hyrox_division_key")

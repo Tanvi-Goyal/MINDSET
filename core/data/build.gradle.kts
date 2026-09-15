@@ -20,7 +20,8 @@ kotlin {
             implementation(projects.core.domain) // implements the repository interfaces
             implementation(projects.core.database) // AppDatabase, DAOs, entities, importer, asset reader
             implementation(projects.core.datastore) // DataStore<Preferences> (device-local settings)
-            implementation(projects.core.network) // WgerApi (MuscleImageProvider)
+            implementation(projects.core.network) // WgerApi (MuscleImageProvider), RaceCalendarApi
+            implementation(projects.contracts) // HyroxCalendarSeed: the bundled race calendar
             implementation(projects.core.model) // mappers produce domain models
             implementation(projects.core.common) // UuidGenerator
             implementation(libs.room.runtime) // useWriterConnection / immediateTransaction
@@ -33,6 +34,7 @@ kotlin {
         }
         iosTest.dependencies {
             implementation(libs.kotlin.test)
+            implementation(projects.contracts) // HyroxCalendarSeed in RaceCalendarRepositoryTest
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.androidx.sqlite.bundled) // BundledSQLiteDriver for in-memory test DBs
         }

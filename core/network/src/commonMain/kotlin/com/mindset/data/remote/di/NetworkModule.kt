@@ -1,6 +1,8 @@
 package com.mindset.data.remote.di
 
+import com.mindset.data.remote.KtorRaceCalendarApi
 import com.mindset.data.remote.KtorSyncApi
+import com.mindset.data.remote.RaceCalendarApi
 import com.mindset.data.remote.SyncApi
 import com.mindset.data.remote.WgerApi
 import com.mindset.data.remote.createHttpClient
@@ -8,12 +10,13 @@ import com.mindset.data.remote.syncBaseUrl
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
-/** Network graph: HTTP client (from the platform engine) → sync transport + wger client. */
+/** Network graph: HTTP client (from the platform engine) → sync transport + reference clients. */
 val networkModule =
     module {
         single { createHttpClient(get()) }
         single<SyncApi> { KtorSyncApi(get(), syncBaseUrl) }
         single { WgerApi(get()) }
+        single<RaceCalendarApi> { KtorRaceCalendarApi(get(), syncBaseUrl) }
     }
 
 /**

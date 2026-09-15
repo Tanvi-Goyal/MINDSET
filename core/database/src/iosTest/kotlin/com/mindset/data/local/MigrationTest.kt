@@ -360,4 +360,41 @@ class MigrationTest {
 
         db.close()
     }
+
+    /**
+     * v13 → v14. Adds the `race_event` reference table behind the onboarding race picker. A pure
+     * addition, so nothing is recreated and no data moves — but `runMigrationsAndValidate` still
+     * checks the `CREATE TABLE` and both indices against `14.json`, which is what catches the
+     * schema drift that would otherwise brick every upgrading device on first launch.
+     */
+    @Test
+    fun v14_adds_the_race_event_calendar_table() = runTest {
+        val helper = MigrationTestHelper(
+            schemaDirectoryPath = schemaDir,
+            fileName = NSTemporaryDirectory() + "mindset-migration-test-v14.db",
+            driver = BundledSQLiteDriver(),
+            databaseClass = AppDatabase::class,
+        )
+        helper.createDatabase(version = 13).apply {
+            execSQL("INSERT INTO athlete_profile (id, fullName, bodyweightKg, heightCm) VALUES (0, 'Alex', 80.0, 180.0)")
+            execSQL(
+                "INSERT INTO race_goal (id, formatKey, divisionKey, mode, targetDate, city, status, " +
+                    "createdAt, updatedAt, syncStatus) VALUES " +
+                    "('g1', 'HYROX', 'MEN', 'SINGLES', 5000, 'Rome', 'UPCOMING', 1000, 1000, 'PENDING')",
+            )
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(version = 14, migrations = listOf(MIGRATION_13_14))
+
+        // The new table exists and starts empty — it is filled by the repository's seed-on-read.
+        assertEquals(0L, db.long("SELECT COUNT(*) FROM race_event"))
+        assertEquals(7L, db.long("SELECT COUNT(*) FROM pragma_table_info('race_event')"))
+
+        // Existing race intent is untouched by a pure-addition migration.
+        assertEquals("Rome", db.text("SELECT city FROM race_goal WHERE id = 'g1'"))
+        assertEquals("Alex", db.text("SELECT fullName FROM athlete_profile WHERE id = 0"))
+
+        db.close()
+    }
 }

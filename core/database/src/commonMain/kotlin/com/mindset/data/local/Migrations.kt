@@ -338,3 +338,27 @@ val MIGRATION_12_13 = object : Migration(12, 13) {
         connection.execSQL("ALTER TABLE `athlete_profile_new` RENAME TO `athlete_profile`")
     }
 }
+
+/**
+ * v13 → v14. Adds `race_event`: the HYROX race calendar the onboarding picker reads.
+ *
+ * A pure addition, so there is no table-recreate here (see [MIGRATION_7_8] for why existing tables
+ * need one) — but the CREATE and both indices must still match `schemas/…/14.json` verbatim, or
+ * Room's post-migration validation refuses to open the database.
+ *
+ * No backfill: the table is populated by the repository's seed-on-read, which runs on the next read
+ * because `race_calendar_seed_version` is absent and therefore reads as 0.
+ */
+val MIGRATION_13_14 = object : Migration(13, 14) {
+    override suspend fun migrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            "CREATE TABLE IF NOT EXISTS `race_event` (`id` TEXT NOT NULL, `city` TEXT NOT NULL, " +
+                "`country` TEXT NOT NULL, `startDate` INTEGER NOT NULL, `endDate` INTEGER NOT NULL, " +
+                "`formatKey` TEXT NOT NULL, `source` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        )
+        connection.execSQL("CREATE INDEX IF NOT EXISTS `index_race_event_city` ON `race_event` (`city`)")
+        connection.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_race_event_startDate` ON `race_event` (`startDate`)",
+        )
+    }
+}

@@ -15,4 +15,5 @@ fun buildDatabase(builder: RoomDatabase.Builder<AppDatabase>): AppDatabase = bui
         MIGRATION_10_11,
         MIGRATION_11_12,
         MIGRATION_12_13,
+        MIGRATION_13_14,
     ).build()

@@ -23,4 +23,10 @@ object SyncMetaKeys {
 
     /** Version of the seeded event-format reference tables on this device; bump to re-seed (see repository). */
     const val EVENT_SEED_VERSION = "event_seed_version"
+
+    /** Version of the bundled race calendar written to this device; bump to re-seed (see repository). */
+    const val RACE_CALENDAR_SEED_VERSION = "race_calendar_seed_version"
+
+    /** Catalog version last accepted from the reference endpoint; skips redundant local writes. */
+    const val RACE_CALENDAR_REMOTE_VERSION = "race_calendar_remote_version"
 }

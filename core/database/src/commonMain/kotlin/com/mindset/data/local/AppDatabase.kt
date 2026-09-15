@@ -16,6 +16,7 @@ import com.mindset.data.local.dao.ExerciseEntryDao
 import com.mindset.data.local.dao.OutboxDao
 import com.mindset.data.local.dao.PersonalRecordDao
 import com.mindset.data.local.dao.PlannedSessionDao
+import com.mindset.data.local.dao.RaceEventDao
 import com.mindset.data.local.dao.RaceGoalDao
 import com.mindset.data.local.dao.SessionDao
 import com.mindset.data.local.dao.SetEntryDao
@@ -36,9 +37,9 @@ import com.mindset.data.local.dao.SyncMetaDao
         BlockEntity::class, PersonalRecord::class,
         AthleteProfileEntity::class, EntitlementEntity::class,
         EventFormatEntity::class, EventSegmentEntity::class, EventDivisionEntity::class,
-        EventSegmentStandardEntity::class, RaceGoalEntity::class,
+        EventSegmentStandardEntity::class, RaceGoalEntity::class, RaceEventEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = true,
 )
 @ConstructedBy(AppDatabaseConstructor::class)
@@ -72,6 +73,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun eventSegmentStandardDao(): EventSegmentStandardDao
 
     abstract fun raceGoalDao(): RaceGoalDao
+
+    abstract fun raceEventDao(): RaceEventDao
 
     abstract fun athleteProfileDao(): AthleteProfileDao
 

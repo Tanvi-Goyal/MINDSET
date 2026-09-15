@@ -1,5 +1,6 @@
 package com.mindset.domain.repository
 
+import com.mindset.domain.HeightUnit
 import com.mindset.domain.ThemeMode
 import com.mindset.domain.UserPreferences
 import com.mindset.domain.WeightUnit
@@ -16,6 +17,9 @@ interface PreferencesRepository {
     fun observe(): Flow<UserPreferences>
 
     suspend fun setWeightUnit(unit: WeightUnit)
+
+    /** Remembers how the user prefers to enter height. Storage stays cm regardless. */
+    suspend fun setHeightUnit(unit: HeightUnit)
 
     suspend fun setThemeMode(mode: ThemeMode)
 
