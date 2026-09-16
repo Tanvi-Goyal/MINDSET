@@ -34,7 +34,7 @@ struct HomeSlot: Identifiable {
         case raceGoal(title: String, subtitle: String, daysUntil: Int?)
         case performance(sessionCount: Int, trainedDays: Set<Int64>, today: Int64)
         case simulations([SimCard])
-        case recentSessions([RecentSession])
+        case recentSessions([SessionRowModel])
         /// Reached only if Kotlin gains a widget this mapping does not know about.
         case unsupported
     }
@@ -47,17 +47,6 @@ struct SimCard: Identifiable {
     let flag: String
     let tags: [String]
     let isFullRace: Bool
-}
-
-struct RecentSession: Identifiable {
-    let id: String
-    let name: String
-    /// The Kotlin `SessionType` constant name — carried as a String so the view can pick an icon
-    /// without naming Obj-C enum entries.
-    let typeName: String
-    let startedAtMillis: Int64
-    let volumeKg: Double
-    let durationSec: Int?
 }
 
 struct ActiveWorkoutSnapshot {
@@ -180,8 +169,10 @@ final class HomeStore: ObservableObject {
         if let recent = widget as? WidgetRecentSessionsWidget {
             let volumes = unboxDoubleMap(recent.volumesById)
             let durations = unboxIntMap(recent.durationsById)
+            // `volumes` is read but never rendered — SessionRow ignores it on Android too.
+            _ = volumes
             return .recentSessions(recent.sessions.map { session in
-                RecentSession(
+                SessionRowModel(
                     id: session.id,
                     name: session.name,
                     typeName: session.type.name,
@@ -189,7 +180,6 @@ final class HomeStore: ObservableObject {
                     // `kotlin.time.Instant` (not kotlinx-datetime). It bridges as an opaque class,
                     // NOT a Foundation `Date` — so convert explicitly at the seam.
                     startedAtMillis: session.startedAt.toEpochMilliseconds(),
-                    volumeKg: volumes[session.id] ?? 0,
                     durationSec: durations[session.id]
                 )
             })

@@ -199,7 +199,7 @@ private struct StationCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Space.smd) {
             HStack(spacing: Space.sm) {
-                Image(systemName: Self.symbol(for: card.segmentKey))
+                Image(systemName: SessionIcons.stationSymbol(card.segmentKey))
                     .font(.system(size: 18))
                     .foregroundStyle(Obsidian.primary)
                 Text(card.name)
@@ -292,19 +292,6 @@ private struct StationCardView: View {
         )
     }
 
-    /// `UIHelper.stationIcon` matches on substrings of the segment key; same rule, SF Symbols.
-    private static func symbol(for segmentKey: String?) -> String {
-        guard let key = segmentKey?.lowercased() else { return "bolt.fill" }
-        if key.contains("run") { return "figure.run" }
-        if key.contains("ski") { return "figure.skiing.crosscountry" }
-        if key.contains("sled") { return "arrow.right.to.line" }
-        if key.contains("burpee") { return "figure.jumprope" }
-        if key.contains("rowing") { return "figure.rower" }
-        if key.contains("farmers") { return "dumbbell.fill" }
-        if key.contains("sandbag") || key.contains("lunge") { return "figure.strengthtraining.functional" }
-        if key.contains("wall-ball") || key.contains("wall_ball") { return "basketball.fill" }
-        return "bolt.fill"
-    }
 }
 
 // MARK: - Pieces

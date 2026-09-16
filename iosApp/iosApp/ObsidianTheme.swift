@@ -112,6 +112,8 @@ extension View {
 enum MSFont {
     static let displaySmall = Font.system(size: 36, weight: .bold)
     static let headlineSmall = Font.system(size: 24, weight: .bold)
+    /// Between headlineSmall and displaySmall — the stat-tile value size on History and Detail.
+    static let headlineMedium = Font.system(size: 28, weight: .bold)
     static let titleMedium = Font.system(size: 20, weight: .semibold)
     static let titleSmall = Font.system(size: 16, weight: .semibold)
     static let bodyLarge = Font.system(size: 16)

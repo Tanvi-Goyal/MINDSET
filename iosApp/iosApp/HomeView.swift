@@ -14,10 +14,18 @@ import Shared
 /// A note on what is *not* a bug: with an empty database this screen shows three cards, not five.
 /// `HomeViewModel.raceGoalSlot()` emits nil when there is no upcoming race and `liveWorkoutSlot()`
 /// emits nil when nothing is running, and `listOfNotNull` drops both. Android behaves identically.
+/// Destinations pushed from Home. History is reached from "See all" and Session Detail from a row —
+/// matching `MindSetNavHost.kt`, where both are pushes and neither is a tab.
+private enum HomeRoute: Hashable {
+    case history
+    case sessionDetail(String)
+}
+
 struct HomeView: View {
     private let onOpenProfile: (() -> Void)?
 
     @StateObject private var store = HomeStore()
+    @State private var path: [HomeRoute] = []
 
     // Explicit, because a `private` stored property (the @StateObject) would otherwise make the
     // synthesized memberwise initializer private too — and ContentView needs to call it.
@@ -26,7 +34,7 @@ struct HomeView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.lg) {
                     ForEach(rows, id: \.id) { row in
@@ -54,6 +62,17 @@ struct HomeView: View {
             }
             .background(Obsidian.background)
             .mindSetToolbar(onOpenProfile: onOpenProfile)
+            .navigationDestination(for: HomeRoute.self) { route in
+                switch route {
+                case .history:
+                    HistoryView(
+                        onOpenDetail: { path.append(.sessionDetail($0)) },
+                        onOpenProfile: onOpenProfile
+                    )
+                case .sessionDetail(let id):
+                    SessionDetailView(sessionId: id) { path.removeLast() }
+                }
+            }
         }
     }
 
@@ -81,7 +100,11 @@ struct HomeView: View {
         case .simulations(let sims):
             SimulationRail(sims: sims)
         case .recentSessions(let sessions):
-            RecentSessionsSection(sessions: sessions)
+            RecentSessionsSection(
+                sessions: sessions,
+                onOpenDetail: { path.append(.sessionDetail($0)) },
+                onSeeAll: { path.append(.history) }
+            )
         case .unsupported:
             EmptyView()
         }
@@ -228,78 +251,7 @@ private struct WeeklyPerformanceCard: View {
 
     /// Epoch day 0 is a Thursday, so Monday index within the week is `((day % 7) + 3) % 7` — the same
     /// expression `HomeViewModel.performanceLikeSlot` uses to find the current Monday.
-    private var weekCells: [DayCell] {
-        let mondayIndex = ((today % 7) + 3) % 7
-        let monday = today - mondayIndex
-        return (0..<7).map { offset in
-            let day = monday + Int64(offset)
-            let state: DayCell.State = day == today
-                ? .today
-                : (trainedDays.contains(day) ? .trained : .idle)
-            return DayCell(epochDay: day, state: state)
-        }
-    }
-}
-
-private struct DayCell {
-    enum State { case today, trained, idle }
-    let epochDay: Int64
-    let state: State
-
-    /// Day-of-month, in UTC — matching the Kotlin side, which does this arithmetic in UTC too.
-    var dayOfMonth: Int {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
-        let date = Date(timeIntervalSince1970: Double(epochDay) * 86_400)
-        return calendar.component(.day, from: date)
-    }
-}
-
-/// `CalendarDayDot` from `core/ui/.../CalendarDayDot.kt` — a 30pt rounded square, not a dot, with a
-/// check badge overlapping the top-right corner on trained days.
-private struct CalendarDayTile: View {
-    let cell: DayCell
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Text("\(cell.dayOfMonth)")
-                .labelLargeStyle()
-                .fontWeight(cell.state == .today ? .bold : .regular)
-                .foregroundStyle(foreground)
-                .frame(width: 30, height: 30)
-                .background(background, in: RoundedRectangle(cornerRadius: Radius.sm))
-                .overlay(
-                    RoundedRectangle(cornerRadius: Radius.sm)
-                        .strokeBorder(cell.state == .trained ? Obsidian.primary : .clear, lineWidth: 1)
-                )
-
-            if cell.state == .trained {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(Obsidian.onPrimary)
-                    .frame(width: 16, height: 16)
-                    .background(Obsidian.primary, in: Circle())
-                    .offset(x: 4, y: -4)
-            }
-        }
-        .frame(width: 30, height: 30)
-    }
-
-    private var background: Color {
-        switch cell.state {
-        case .today: return Obsidian.primary
-        case .trained: return Obsidian.primary.opacity(0.18)
-        case .idle: return Obsidian.glassFill
-        }
-    }
-
-    private var foreground: Color {
-        switch cell.state {
-        case .today: return Obsidian.onPrimary
-        case .trained: return Obsidian.onSurface
-        case .idle: return Obsidian.onSurfaceVariant
-        }
-    }
+    private var weekCells: [DayCell] { DayCell.week(today: today, trained: trainedDays) }
 }
 
 // MARK: - Simulations
@@ -388,14 +340,19 @@ private struct SimulationTile: View {
 /// Not a single card: a section header plus one glass row per session, matching
 /// `RecentSessionsCard.kt` + `core/ui/.../SessionRow.kt`.
 private struct RecentSessionsSection: View {
-    let sessions: [RecentSession]
+    let sessions: [SessionRowModel]
+    let onOpenDetail: (String) -> Void
+    let onSeeAll: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.md) {
             SectionHeader(title: "Recent Sessions") {
-                Text("See all")
-                    .labelLargeStyle()
-                    .foregroundStyle(Obsidian.primary)
+                Button(action: onSeeAll) {
+                    Text("See all")
+                        .labelLargeStyle()
+                        .foregroundStyle(Obsidian.primary)
+                }
+                .buttonStyle(.plain)
             }
 
             if sessions.isEmpty {
@@ -403,63 +360,10 @@ private struct RecentSessionsSection: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(sessions) { session in
-                        SessionRow(session: session)
+                        SessionRowView(session: session) { onOpenDetail(session.id) }
                     }
                 }
             }
-        }
-    }
-}
-
-private struct SessionRow: View {
-    let session: RecentSession
-
-    var body: some View {
-        HStack(spacing: Space.md) {
-            Image(systemName: session.typeSymbol)
-                .font(.system(size: 16))
-                .foregroundStyle(Obsidian.onSurfaceVariant)
-                .frame(width: 16, height: 16)
-                .padding(Space.sm)
-                .background(Obsidian.secondaryContainer, in: Circle())
-
-            VStack(alignment: .leading, spacing: Space.xs) {
-                Text(session.name)
-                    .font(MSFont.bodyMedium.weight(.bold))
-                    .foregroundStyle(Obsidian.onSurface)
-                    .lineLimit(1)
-                Text(Format.relativeDay(session.startedAtMillis))
-                    .labelMediumStyle()
-                    .foregroundStyle(Obsidian.onSurfaceVariant)
-            }
-
-            Spacer(minLength: Space.sm)
-
-            if let seconds = session.durationSec, seconds > 0 {
-                Text(Format.duration(seconds))
-                    .font(MSFont.bodyMedium)
-                    .foregroundStyle(Obsidian.onSurface)
-            }
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Obsidian.onSurfaceVariant)
-                .frame(width: 32, height: 32)
-        }
-        .padding(Space.md)
-        .glassCard()
-        .padding(.vertical, Space.xs)
-    }
-}
-
-private extension RecentSession {
-    /// `typeIcon` in SessionRow.kt: conditioning → run, hyrox → lightning, mixed → bolt, else dumbbell.
-    var typeSymbol: String {
-        switch typeName {
-        case "CONDITIONING": return "figure.run"
-        case "HYROX": return "bolt.fill"
-        case "MIXED": return "bolt.horizontal.fill"
-        default: return "dumbbell.fill"
         }
     }
 }

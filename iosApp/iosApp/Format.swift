@@ -33,6 +33,21 @@ enum Format {
         return formatter.string(from: date)
     }
 
+    /// Zero-padded `mm:ss`, or `h:mm:ss` past an hour — `formatClockMs` in SessionRow.kt.
+    ///
+    /// Deliberately different from the shared `TimeTextKt.formatClockSec`, which renders an
+    /// *unpadded* `m:ss`. Android uses the padded form for totals and splits and the unpadded form
+    /// inside `detailSummary`; both appear on Session Detail, so both spellings are kept.
+    static func clockMs(_ millis: Int64) -> String {
+        let total = Int(millis / 1000)
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let seconds = total % 60
+        return hours > 0
+            ? String(format: "%d:%02d:%02d", hours, minutes, seconds)
+            : String(format: "%02d:%02d", minutes, seconds)
+    }
+
     /// "1h 25m" past an hour, else "25m 10s" — matching SessionRow.kt's `formatDuration`.
     static func duration(_ totalSeconds: Int) -> String {
         let hours = totalSeconds / 3600
