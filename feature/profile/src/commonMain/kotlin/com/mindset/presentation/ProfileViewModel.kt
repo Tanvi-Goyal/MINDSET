@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mindset.domain.UserPreferences
 import com.mindset.domain.repository.AthleteProfileRepository
+import com.mindset.domain.repository.EntitlementRepository
 import com.mindset.domain.repository.PreferencesRepository
 import com.mindset.domain.repository.SessionRepository
 import com.mindset.domain.trainingStreakDays
@@ -30,13 +31,15 @@ class ProfileViewModel(
     private val sessionRepository: SessionRepository,
     athleteProfileRepository: AthleteProfileRepository,
     preferencesRepository: PreferencesRepository,
+    entitlements: EntitlementRepository,
 ) : ViewModel() {
 
     val uiState: StateFlow<ProfileUiState> = combine(
         athleteProfileRepository.observe(),
         preferencesRepository.observe(),
         sessionDerived(),
-    ) { profile, prefs, derived ->
+        entitlements.observe(),
+    ) { profile, prefs, derived, entitlement ->
         ProfileUiState(
             isLoading = false,
             athleteName = profile.fullName.ifBlank { "Athlete" },
@@ -44,6 +47,7 @@ class ProfileViewModel(
             streakDays = derived.streakDays,
             totalSessions = derived.totalSessions,
             frequency = derived.frequency,
+            isPro = entitlement.isPro,
         )
     }.stateIn(
         scope = viewModelScope,

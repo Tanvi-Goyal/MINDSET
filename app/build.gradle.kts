@@ -23,6 +23,18 @@ val versionPatch = libs.versions.app.versionPatch.get().toInt()
 val appVersionName = "$versionMajor.$versionMinor.$versionPatch"
 val appVersionCode = versionMajor * 10_000 + versionMinor * 100 + versionPatch
 
+// RevenueCat SDK keys, read from the gitignored local.properties. These are *publishable* client
+// keys (not secrets like the signing keystore), but they stay out of git so a fork can't bill
+// against this project's account and so debug/release can't be mixed up by accident.
+// Absent on CI and on a fresh clone — debug degrades to an empty key (the paywall simply reports
+// billing unavailable) rather than failing configuration.
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use(::load)
+}
+val revenueCatDebugKey: String = localProperties.getProperty("revenuecat.apiKey.debug").orEmpty()
+val revenueCatReleaseKey: String = localProperties.getProperty("revenuecat.apiKey.release").orEmpty()
+
 if (hasFirebaseConfig) {
     apply(plugin = libs.plugins.googleServices.get().pluginId)
     apply(plugin = libs.plugins.firebaseCrashlytics.get().pluginId)
@@ -48,6 +60,9 @@ dependencies {
     implementation(projects.core.designsystem)
     implementation(projects.core.ui)
     implementation(projects.core.navigation)
+    // configureBilling + EntitlementSyncer, both started in MindSetApplication. Declared here
+    // rather than leaned on transitively: :app is the only module that may hold the API key.
+    implementation(projects.core.billing)
     implementation(projects.feature.profile)
     implementation(projects.feature.stations)
     implementation(projects.feature.history)
@@ -129,6 +144,8 @@ android {
         // Off everywhere by default; only the `benchmark` variant turns it on. MainActivity is
         // exported, so the bulk-seed intent extra it gates must never be honored in a shipped build.
         buildConfigField("boolean", "SEED_HOOK_ENABLED", "false")
+
+        buildConfigField("String", "REVENUECAT_API_KEY", "\"$revenueCatDebugKey\"")
     }
     buildFeatures {
         buildConfig = true
@@ -182,6 +199,10 @@ android {
             // larger upload, which is not worth it for libraries we do not maintain.
             ndk { debugSymbolLevel = "SYMBOL_TABLE" }
             if (hasReleaseKeystore) signingConfig = signingConfigs.getByName("release")
+
+            // Play-billing key. Guarded by verifyReleaseRevenueCatKey below — a Test Store key
+            // here would ship a paywall that can never actually charge anyone.
+            buildConfigField("String", "REVENUECAT_API_KEY", "\"$revenueCatReleaseKey\"")
         }
         // Non-debuggable, profileable variant Macrobenchmark runs against (it refuses debuggable
         // builds). Signed with the debug key so the release-like APK still installs locally.
@@ -225,4 +246,33 @@ androidComponents {
             )
         }
     }
+}
+
+// A Test Store key (`test_…`) never reaches Google Play billing: it simulates purchases in-app, so
+// shipping one produces a paywall that renders, accepts a tap, and can never charge anyone —
+// silently, with no crash to notice. RevenueCat's own docs are blunt about it ("Never submit an app
+// ... configured with a Test Store API key"), so this is a hard build failure rather than a warning.
+//
+// Wired as a task dependency, not a configuration-time `check`, so it fails ONLY when a release
+// artifact is actually being produced — `assembleDebug` on a fresh clone with no local.properties
+// must still work.
+val verifyReleaseRevenueCatKey = tasks.register("verifyReleaseRevenueCatKey") {
+    group = "verification"
+    description = "Fails the build if the release RevenueCat key is missing or is a Test Store key."
+    doLast {
+        check(revenueCatReleaseKey.isNotBlank()) {
+            "Missing `revenuecat.apiKey.release` in local.properties. Add the Play (goog_…) SDK key " +
+                "from RevenueCat → Project Settings → API keys."
+        }
+        check(!revenueCatReleaseKey.startsWith("test_")) {
+            "`revenuecat.apiKey.release` is a Test Store key. Test Store purchases are simulated and " +
+                "never reach Play billing — a release built with this key cannot take payment."
+        }
+    }
+}
+
+// Covers the bundle too: `bundleRelease` is what actually goes to Play, and it does not run
+// assembleRelease.
+tasks.matching { it.name == "assembleRelease" || it.name == "bundleRelease" }.configureEach {
+    dependsOn(verifyReleaseRevenueCatKey)
 }

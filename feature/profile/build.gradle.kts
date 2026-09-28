@@ -36,6 +36,7 @@ kotlin {
             implementation(libs.compose.runtime)
         }
         androidMain.dependencies {
+            implementation(projects.feature.paywall)
             implementation(projects.core.ui) // MindSetBottomBar, Tab
             implementation(projects.core.designsystem) // MindSetTheme + color tokens
             implementation(projects.core.navigation) // Credits typed route

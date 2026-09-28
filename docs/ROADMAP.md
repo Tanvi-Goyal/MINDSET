@@ -24,7 +24,8 @@ Already built (both platforms): full logging loop (reps/load/time/distance/RPE),
 2. **iOS: keep compiling, port later.** iOS must keep building; new screens land Android-first; iOS parity is a post-race batch.
 3. **Backend: keep + harden the custom Ktor sync engine** (the portfolio centerpiece). Postgres behind the existing `SessionStore` interface. Rejected Supabase (free tier pauses after 7d idle; replacing the engine is portfolio-negative) and Firestore (offline cache ≠ source of truth).
 4. **Hyrox standards are DATA, never hardcoded** — 25/26 wall-ball rep counts conflict across sources; seed from the official rulebook, verify.
-5. **hyfit does not expose an API** — its app is a white-label of Spur.fit (no public API/export). The answer is Health Connect import + fast class-template re-logging, not direct integration.
+5. **Monetization: subscriptions only — ads deliberately rejected for v1.** RevenueCat subscriptions (`:core:billing`), metered paywall on Stations, entitlement read from Room so Pro survives offline. Ads were considered and dropped: at beta-tester DAU the expected AdMob revenue is smaller than the compliance surface it drags in (UMP consent SDK, GDPR/DMA consent, Play Data Safety redeclaration, `AD_ID` permission, privacy-policy rewrite), and shipping ads alongside a subscription silently reduces the paywall's pitch to "remove the ads" — the weakest value prop available, and one that caps pricing. Revisit only at real scale, and then rewarded-only, never in the workout flow.
+6. **hyfit does not expose an API** — its app is a white-label of Spur.fit (no public API/export). The answer is Health Connect import + fast class-template re-logging, not direct integration.
 
 ---
 

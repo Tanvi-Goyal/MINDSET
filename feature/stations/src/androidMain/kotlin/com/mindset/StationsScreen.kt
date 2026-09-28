@@ -2,6 +2,7 @@ package com.mindset
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mindset.components.BottomNavBar
 import com.mindset.components.MindSetTopBar
 import com.mindset.helpers.UIHelper
+import com.mindset.icons.Lock
 import com.mindset.icons.TrendDown
 import com.mindset.icons.TrendUp
 import com.mindset.model.BottomNavTab
@@ -47,10 +49,7 @@ import com.mindset.presentation.StationsViewModel
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
-fun StationsScreen(
-    onTab: (BottomNavTab) -> Unit,
-    viewModel: StationsViewModel = koinViewModel(),
-) {
+fun StationsScreen(onTab: (BottomNavTab) -> Unit, viewModel: StationsViewModel = koinViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     MindSetTheme {
@@ -69,13 +68,24 @@ fun StationsScreen(
                 )
             },
         ) { padding ->
-            StationBoard(state = state, contentPadding = padding)
+            StationBoard(
+                state = state,
+                contentPadding = padding,
+                onUnlockClick = viewModel::openPaywall,
+            )
+        }
+
+        // Rides on top of a live board — the tab itself is never blocked. A completed purchase is
+        // not handled here: it arrives through EntitlementRepository like any other entitlement
+        // change, so this only has to close itself.
+        if (state.showPaywall) {
+            PaywallSheet(onDismiss = viewModel::dismissPaywall)
         }
     }
 }
 
 @Composable
-private fun StationBoard(state: StationsUiState, contentPadding: PaddingValues) {
+private fun StationBoard(state: StationsUiState, contentPadding: PaddingValues, onUnlockClick: () -> Unit) {
     val spacing = MaterialTheme.spacing
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
@@ -96,6 +106,14 @@ private fun StationBoard(state: StationsUiState, contentPadding: PaddingValues) 
             },
         ) {
             BoardHeader()
+        }
+
+        // Keeps the offer reachable after the metered prompt has been dismissed, so dismissing it
+        // once does not hide Pro forever.
+        if (!state.isPro) {
+            item(key = "unlock", span = { GridItemSpan(maxLineSpan) }) {
+                UnlockProCard(onClick = onUnlockClick)
+            }
         }
 
         items(state.stations, key = { it.station.name }) { card ->
@@ -138,6 +156,51 @@ private fun BoardHeader() {
                 .clip(MaterialTheme.shapes.extraSmall)
                 .background(colors.primary),
         )
+    }
+}
+
+@Composable
+private fun UnlockProCard(onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val shape = MaterialTheme.shapes.medium
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(GlassFill)
+            .border(1.dp, GlassBorder, shape)
+            .clickable(onClick = onClick)
+            .padding(
+                horizontal = MaterialTheme.spacing.smd,
+                vertical = MaterialTheme.spacing.md,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            MindSetIcons.Lock,
+            contentDescription = null,
+            tint = colors.primary,
+            modifier = Modifier.size(16.dp),
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = MaterialTheme.spacing.smd),
+        ) {
+            Text(
+                text = "MIND[SET] Pro",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = colors.onSurface,
+            )
+            Text(
+                text = "Full history and every station record",
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.outline,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -200,7 +263,6 @@ private fun StationCard(card: StationCardUi) {
             if (card.trend != null) TrendChip(card.trend)
         }
 
-
         Spacer(modifier = Modifier.height(MaterialTheme.spacing.md))
 
         MetricRow(
@@ -221,11 +283,7 @@ private fun StationCard(card: StationCardUi) {
 }
 
 @Composable
-private fun MetricRow(
-    label: String,
-    value: String,
-    valueColor: Color,
-) {
+private fun MetricRow(label: String, value: String, valueColor: Color) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -260,8 +318,11 @@ private fun TrendChip(trend: StationTrendUi) {
     ) {
         Icon(
             if (trend.improving) MindSetIcons.TrendUp else MindSetIcons.TrendDown,
-            contentDescription = if (trend.improving) "Faster than last session"
-            else "Slower than last session",
+            contentDescription = if (trend.improving) {
+                "Faster than last session"
+            } else {
+                "Slower than last session"
+            },
             tint = tint,
             modifier = Modifier.size(10.dp),
         )

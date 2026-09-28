@@ -28,6 +28,7 @@ kotlin {
             implementation(libs.compose.runtime) // Compose compiler runs on every target (see :feature:profile)
         }
         androidMain.dependencies {
+            implementation(projects.feature.paywall)
             implementation(projects.core.ui)
             implementation(projects.core.designsystem)
             implementation(projects.core.navigation)

@@ -5,8 +5,10 @@ import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.svg.SvgDecoder
-import com.mindset.di.initKoin
+import com.mindset.billing.EntitlementSyncer
+import com.mindset.billing.configureBilling
 import com.mindset.di.appObservability
+import com.mindset.di.initKoin
 import com.mindset.domain.ActiveWorkoutController
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
@@ -32,6 +34,15 @@ class MindSetApplication :
             // script for why the profiler is a compile-time and not a runtime switch.
             observability = appObservability,
         )
+        // Billing. Configured BEFORE the syncer starts, because the syncer immediately reads
+        // Purchases.sharedInstance. The key is Android-only (BuildConfig), which is exactly why
+        // this lives here and not in shared code — debug builds carry a Test Store key, release
+        // builds the Play key (see :app's build script).
+        configureBilling(apiKey = BuildConfig.REVENUECAT_API_KEY, debugLogging = BuildConfig.DEBUG)
+        // Drains store state into the `entitlement` table for the rest of the app to observe. Owns
+        // its own scope, so this neither blocks startup nor needs a lifecycle to hang off.
+        GlobalContext.get().get<EntitlementSyncer>().start()
+
         // Rehydrate a race that outlived the process. Fire-and-forget and idempotent — it does its
         // reads on the controller's own scope, so it never blocks startup, and a restored race is
         // published paused for the athlete to resume.

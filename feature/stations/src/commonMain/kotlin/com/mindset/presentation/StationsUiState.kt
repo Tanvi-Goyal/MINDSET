@@ -7,6 +7,10 @@ import com.mindset.model.HyroxStation
 data class StationsUiState(
     val loading: Boolean = true,
     val stations: List<StationCardUi> = emptyList(),
+    /** Entitlement gate. Pro hides the upsell affordance; the board itself is never gated. */
+    val isPro: Boolean = false,
+    /** Whether the paywall sheet is riding on top of the board. */
+    val showPaywall: Boolean = false,
 )
 
 @Immutable

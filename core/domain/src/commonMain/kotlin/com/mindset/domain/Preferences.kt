@@ -17,6 +17,13 @@ data class UserPreferences(
     val hyroxDivisionKey: String? = null,
     val gender: Gender? = null,
     val raceMode: RaceMode? = null,
+    /**
+     * How many times the Stations tab has been opened. Drives the metered paywall prompt. Counts
+     * *app sessions that reached Stations*, not taps — see PreferencesRepository.recordStationsOpened.
+     */
+    val stationsViewCount: Int = 0,
+    /** True once the Stations paywall has been shown. Keeps the prompt to a single appearance. */
+    val hasSeenStationsPaywall: Boolean = false,
 )
 
 /**

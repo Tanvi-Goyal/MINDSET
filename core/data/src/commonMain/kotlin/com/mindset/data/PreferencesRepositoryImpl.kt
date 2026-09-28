@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.mindset.domain.ThemeMode
 import com.mindset.domain.UserPreferences
@@ -27,6 +28,8 @@ class PreferencesRepositoryImpl(private val dataStore: DataStore<Preferences>) :
                 ?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
                 ?: ThemeMode.SYSTEM,
             isOnboardingComplete = prefs[Keys.ONBOARDING_COMPLETE] ?: false,
+            stationsViewCount = prefs[Keys.STATIONS_VIEW_COUNT] ?: 0,
+            hasSeenStationsPaywall = prefs[Keys.STATIONS_PAYWALL_SEEN] ?: false,
             hyroxDivisionKey = prefs[Keys.HYROX_DIVISION_KEY],
             gender = prefs[Keys.GENDER]?.let { runCatching { Gender.valueOf(it) }.getOrNull() },
             raceMode =
@@ -60,6 +63,18 @@ class PreferencesRepositoryImpl(private val dataStore: DataStore<Preferences>) :
         }
     }
 
+    override suspend fun recordStationsOpened() {
+        // Read-modify-write inside a single `edit` block: DataStore serializes the transform, so
+        // two concurrent callers cannot both read the same value and lose an increment.
+        dataStore.edit { prefs ->
+            prefs[Keys.STATIONS_VIEW_COUNT] = (prefs[Keys.STATIONS_VIEW_COUNT] ?: 0) + 1
+        }
+    }
+
+    override suspend fun setStationsPaywallSeen() {
+        dataStore.edit { it[Keys.STATIONS_PAYWALL_SEEN] = true }
+    }
+
     override suspend fun getRaceInfo(): Triple<String?, Gender?, RaceMode?> {
         val prefs = dataStore.data.firstOrNull()
         val divisionKey = prefs?.get(Keys.HYROX_DIVISION_KEY)
@@ -76,5 +91,7 @@ class PreferencesRepositoryImpl(private val dataStore: DataStore<Preferences>) :
         val HYROX_DIVISION_KEY = stringPreferencesKey("hyrox_division_key")
         val GENDER = stringPreferencesKey("gender")
         val RACE_MODE = stringPreferencesKey("race_mode")
+        val STATIONS_VIEW_COUNT = intPreferencesKey("stations_view_count")
+        val STATIONS_PAYWALL_SEEN = booleanPreferencesKey("stations_paywall_seen")
     }
 }

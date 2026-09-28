@@ -22,9 +22,18 @@ interface PreferencesRepository {
     /** Marks first-run onboarding complete (or resets it). Read back via [observe]. */
     suspend fun setOnboardingComplete(complete: Boolean)
 
-
     suspend fun setRaceInfo(formatKey: String, gender: Gender, divisionKey: String, raceMode: RaceMode)
 
     suspend fun getRaceInfo(): Triple<String?, Gender?, RaceMode?>
 
+    /**
+     * Records that the athlete reached the Stations tab, incrementing
+     * [UserPreferences.stationsViewCount]. Called once per ViewModel creation, so it counts app
+     * sessions that reached Stations rather than individual taps — three separate training-day
+     * visits, not three taps inside one confused session.
+     */
+    suspend fun recordStationsOpened()
+
+    /** Marks the Stations paywall as shown, so the metered prompt never fires a second time. */
+    suspend fun setStationsPaywallSeen()
 }

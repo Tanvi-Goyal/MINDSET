@@ -1,5 +1,6 @@
 package com.mindset.di
 
+import com.mindset.billing.di.billingModule
 import com.mindset.common.di.commonModule
 import com.mindset.data.di.dataModule
 import com.mindset.data.local.di.databaseModule
@@ -37,6 +38,7 @@ fun initKoin(
         networkPlatformModule,
         dataModule,
         syncModule,
+        billingModule,
         // Feature ViewModel graphs (each in package com.mindset.di in its feature module):
         homeModule,
         loggingModule,

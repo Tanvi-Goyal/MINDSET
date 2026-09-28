@@ -22,6 +22,11 @@ data class ProfileUiState(
     val totalSessions: Int = 0,
     /** Oldest → newest; the last entry is the in-progress week. Empty until loaded. */
     val frequency: List<WeekFrequencyUi> = emptyList(),
+    /**
+     * Subscription entitlement, read from the local DB (never the store) like every other field
+     * here. Decides whether the subscription card offers Customer Center or the paywall.
+     */
+    val isPro: Boolean = false,
 )
 
 /** One bar of the training-frequency chart: its axis [label], its height driver, and whether it is "now". */

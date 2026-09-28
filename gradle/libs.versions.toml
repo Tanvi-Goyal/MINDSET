@@ -2,7 +2,7 @@
 agp = "9.4.0"
 android-compileSdk = "37"
 android-ndk = "30.0.16138531"   # pinned: AGP's default NDK may differ from what is installed, and
-                                # a mismatch fails the release build outright. Bump when you update the NDK.
+# a mismatch fails the release build outright. Bump when you update the NDK.
 android-minSdk = "26"    # Context.startForegroundService (RaceTimerService) is API 26+
 #noinspection OldTargetApi
 android-targetSdk = "36"
@@ -38,6 +38,7 @@ benchmark = "1.5.0-rc02"    # Macrobenchmark + baselineprofile; 1.4.1 wants lega
 profileinstaller = "1.4.1"     # installs the baseline profile at runtime (required in the app)
 uiautomator = "2.4.0"          # device gestures for the scroll benchmark
 coil = "3.6.2"                 # Coil 3 (Compose Multiplatform) for lazy exercise image loading
+purchases = "3.8.0"
 
 kotzilla = "2.3.5"
 spotless = "8.10.2"
@@ -109,6 +110,8 @@ androidx-uiautomator = { module = "androidx.test.uiautomator:uiautomator", versi
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 coil-svg = { module = "io.coil-kt.coil3:coil-svg", version.ref = "coil" }
+purchases-core = { module = "com.revenuecat.purchases:purchases-kmp-core", version.ref = "purchases" }
+purchases-ui = { module = "com.revenuecat.purchases:purchases-kmp-ui", version.ref = "purchases" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

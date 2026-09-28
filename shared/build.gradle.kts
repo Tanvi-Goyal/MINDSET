@@ -103,6 +103,11 @@ kotlin {
             // cleaned up when features are extracted (B11) and those types move to :core:model.
             api(projects.core.database)
             implementation(projects.core.network)
+            // billingModule (EntitlementSyncer), aggregated in Modules.kt. `implementation`, not
+            // `api`: nothing from billing is re-exported to Swift, and :app declares :core:billing
+            // itself for the two startup calls. Screens read entitlement state through
+            // EntitlementRepository like any other repository.
+            implementation(projects.core.billing)
             implementation(projects.core.sync) // SyncEngine, consumed by HomeViewModel + bound in Koin
             implementation(projects.contracts)
             // Feature modules — `api` so their ViewModels stay exported in Shared.framework for Swift (B11).
