@@ -72,6 +72,11 @@ class EntitlementSyncer(
  * impossible; do not collect it from anywhere else.
  */
 private fun revenueCatProStream(): Flow<Boolean> = callbackFlow {
+    if (!Purchases.isConfigured) {
+        close()
+        return@callbackFlow
+    }
+
     // Install the listener BEFORE the seed fetch: a purchase completing mid-fetch would otherwise
     // land in the gap between the two and be lost until the next app launch.
     Purchases.sharedInstance.delegate = object : PurchasesDelegate {
