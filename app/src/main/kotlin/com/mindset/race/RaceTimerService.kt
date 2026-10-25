@@ -1,12 +1,16 @@
 package com.mindset.race
 
+import android.Manifest
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 import com.mindset.domain.ActiveWorkoutController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,7 +30,9 @@ import org.koin.core.component.inject
  * notification taps back to it, so the notification, the timer sheet, the minimized pill and the Home
  * card are all views of one source and can never disagree.
  */
-class RaceTimerService : Service(), KoinComponent {
+class RaceTimerService :
+    Service(),
+    KoinComponent {
 
     private val controller: ActiveWorkoutController by inject()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -83,6 +89,13 @@ class RaceTimerService : Service(), KoinComponent {
                         stopSelf()
                         return@collect
                     }
+
+                    // Android 13+ needs POST_NOTIFICATIONS to update the notification; the timer
+                    // itself keeps running without it.
+                    val canNotify = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                        ContextCompat.checkSelfPermission(this@RaceTimerService, Manifest.permission.POST_NOTIFICATIONS) ==
+                        PackageManager.PERMISSION_GRANTED
+                    if (!canNotify) return@collect
 
                     NotificationManagerCompat.from(this@RaceTimerService)
                         .notify(
