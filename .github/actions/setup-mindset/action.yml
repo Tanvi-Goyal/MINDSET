@@ -7,6 +7,16 @@ inputs:
   konan:
     description: Also cache ~/.konan (Kotlin/Native toolchain) for jobs that build iOS targets.
     default: "false"
+  build-scan:
+    description: >
+      Publish a Gradle Build Scan (public link in the job summary). CI only; release builds keep it
+      off so nothing about a signed build is published.
+    default: "false"
+  gradle-encryption-key:
+    description: >
+      Key that lets setup-gradle save and restore the configuration cache, which it only stores
+      encrypted. Empty (fork PRs, release) means the configuration phase runs every time.
+    default: ""
 
 runs:
   using: composite
@@ -18,7 +28,13 @@ runs:
         distribution: corretto
         java-version: 21
 
+    # Agreeing here is accepting Gradle's Build Scan terms of use for this repo's CI.
     - uses: gradle/actions/setup-gradle@v6
+      with:
+        build-scan-publish: ${{ inputs.build-scan }}
+        build-scan-terms-of-use-url: https://gradle.com/help/legal-terms-of-use
+        build-scan-terms-of-use-agree: "yes"
+        cache-encryption-key: ${{ inputs.gradle-encryption-key }}
 
     # setup-gradle caches the Gradle user home only; Kotlin/Native's compiler + LLVM live in ~/.konan
     # and are re-downloaded on every cold run otherwise.

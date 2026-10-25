@@ -1,9 +1,12 @@
 name: CI
 
+# Docs-only changes can't break the build, so they skip CI (Spotless's markdown check included).
 on:
   pull_request:
+    paths-ignore: ['docs/**', '**/*.md']
   push:
     branches: [main]
+    paths-ignore: ['docs/**', '**/*.md']
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -24,15 +27,11 @@ jobs:
           fetch-depth: 0
 
       - uses: ./.github/actions/setup-mindset
+        with:
+          build-scan: true
+          gradle-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
-      # Not a real key. It only satisfies verifyReleaseRevenueCatKey (non-blank, not test_) so the
-      # R8 release build runs on every PR, fork PRs included, which never receive secrets.
-      # No keystore.properties here, so the release APK is unsigned by design.
-      - name: Placeholder release config
-        run: echo "revenuecat.apiKey.release=goog_ci_placeholder" > local.properties
-
-      # -x: PR builds are not shipped, so their R8 mappings must not land in Crashlytics.
-      - name: Spotless, unit tests, lint, debug and release builds
+      - name: Spotless, unit tests, lint and debug build
         run: >
           ./gradlew
           spotlessCheck
@@ -40,8 +39,6 @@ jobs:
           :server:test
           :app:lintDebug
           :app:assembleDebug
-          :app:assembleRelease
-          -x :app:uploadCrashlyticsMappingFileRelease
 
       - name: Upload reports
         if: always()
@@ -59,6 +56,37 @@ jobs:
           name: app-debug
           path: app/build/outputs/apk/debug/*.apk
 
+  # R8 is the slowest Android step, so it runs as its own job alongside android and ios.
+  release-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-mindset
+        with:
+          build-scan: true
+          gradle-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+
+      # Not a real key. It only satisfies verifyReleaseRevenueCatKey (non-blank, not test_) so the
+      # R8 release build runs on every PR, fork PRs included, which never receive secrets.
+      # No keystore.properties here, so the release APK is unsigned by design.
+      - name: Placeholder release config
+        run: echo "revenuecat.apiKey.release=goog_ci_placeholder" > local.properties
+
+      # -x: PR builds are not shipped, so their R8 mappings must not land in Crashlytics.
+      - name: R8 release build
+        run: ./gradlew :app:assembleRelease -x :app:uploadCrashlyticsMappingFileRelease
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-build-reports
+          path: "**/build/reports/"
+          if-no-files-found: ignore
+
   ios:
     runs-on: macos-latest
     timeout-minutes: 60
@@ -69,6 +97,8 @@ jobs:
       - uses: ./.github/actions/setup-mindset
         with:
           konan: true
+          build-scan: true
+          gradle-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
       # Room integration tests (iosTest) + proves Shared.framework's export list still links.
       - name: iOS tests and framework link
