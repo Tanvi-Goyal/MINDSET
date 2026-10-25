@@ -681,7 +681,8 @@ recompile and a fresh R8 run. With no cache at all, a run took 8m 06s.*
 - **Docs-only changes skip CI.**
 - **Build Scans on every job**: a public task timeline per run, so the next optimisation is measured,
   not guessed.
-- **Open**: the configuration cache is saved on `main` but not reused by PRs yet.
+- **Not used: the configuration cache across runs.** `setup-gradle` carries it between CI runs only
+  with a paid Develocity licence. Configuration takes ~10s per job here, so that's the most it could save.
 
 #### Design choices
 
