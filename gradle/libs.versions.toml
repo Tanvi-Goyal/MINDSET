@@ -45,7 +45,7 @@ spotless = "8.10.2"
 # Firebase — Crashlytics only. google-services 4.4.1+ is the floor for the Crashlytics v3 plugin.
 googleServices = "4.5.0"
 firebaseCrashlyticsPlugin = "3.0.8"
-firebaseBom = "34.18.0"
+firebaseBom = "35.1.0"
 
 [libraries]
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
