@@ -336,5 +336,12 @@ val MIGRATION_12_13 = object : Migration(12, 13) {
         )
         connection.execSQL("DROP TABLE `athlete_profile`")
         connection.execSQL("ALTER TABLE `athlete_profile_new` RENAME TO `athlete_profile`")
+
+        // 3. Columns removed from ExerciseEntryEntity / BlockEntity in v13 but never migrated.
+        //    DROP COLUMN needs SQLite 3.35+; fine pre-launch, since no non-dev install is on v12.
+        connection.execSQL("ALTER TABLE `exercise_entries` DROP COLUMN `note`")
+        connection.execSQL("ALTER TABLE `blocks` DROP COLUMN `label`")
+        connection.execSQL("ALTER TABLE `blocks` DROP COLUMN `conditioningFormat`")
+        connection.execSQL("ALTER TABLE `blocks` DROP COLUMN `restBetweenRoundsMs`")
     }
 }
