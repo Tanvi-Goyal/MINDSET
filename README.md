@@ -40,7 +40,7 @@ no sign-in, no analytics in the shipped build.
 - [Offline-first & the sync engine](#offline-first--the-sync-engine)
 - [The KMP seam](#the-kmp-seam) — [code sharing, measured](#code-sharing-measured) · [Flow → Swift](#observing-a-kotlin-stateflow-from-swift)
 - [Performance](#performance)
-- [Build & release engineering](#build--release-engineering)
+- [Build & release engineering](#build--release-engineering) — [CI/CD](#cicd) · [build time baseline](#build-time-baseline)
 - [Testing](#testing)
 - [Architecture decision records](#architecture-decision-records)
 - [Build & run](#build--run)
@@ -648,6 +648,53 @@ hook by accident.
 `app/google-services.json` exists, so a fresh clone builds and runs with no Firebase account.
 Crash reporting is the *only* telemetry: no ads, no ad IDs, no behavioural analytics.
 
+### CI/CD
+
+GitHub Actions, in [`.github/`](.github). Every PR and push to `main` runs [`ci.yml`](.github/workflows/ci.yml);
+pushing a `v*.*.*` tag runs [`release.yml`](.github/workflows/release.yml).
+
+| Workflow | Job | Runner | What it proves |
+|---|---|---|---|
+| CI | `android` | `ubuntu-latest` | Spotless (ratcheted against `origin/main`), every module's `testAndroidHostTest`, `:server:test`, `:app:lintDebug`, a debug build, and an **R8 release build** on every PR |
+| CI | `ios` | `macos-latest` | Room integration tests in `iosTest` (`iosSimulatorArm64Test`) and that `Shared.framework` still links |
+| Release | `build` → `github-release` | `ubuntu-latest` | Tag matches `libs.versions.toml`, signed AAB + APK, `apksigner verify`, then a GitHub Release |
+
+- **Fork-safe PR builds.** PRs get no secrets, so CI writes a placeholder `goog_` RevenueCat key. That
+  satisfies `verifyReleaseRevenueCatKey`, so R8 still runs, and the release APK stays unsigned on
+  purpose. PR builds also skip the Crashlytics mapping upload.
+- **Signing rebuilt from secrets.** The release job recreates the gitignored `keystore.properties` and
+  `local.properties` from five `MINDSET_*` secrets on a temporary runner. `mapping.txt` stays a workflow
+  artifact and is never a public release asset.
+- **Shared setup.** A composite action, [`setup-mindset`](.github/actions/setup-mindset/action.yml), installs
+  Corretto 21 (matching `gradle-daemon-jvm.properties`), the Gradle cache and, for iOS jobs, a
+  `~/.konan` cache.
+- **Built to extend.** Release builds once and every destination reuses that one `release` artifact. A
+  `publish-play` job, gated by a GitHub Environment approval, slots in next to `github-release`.
+- **Not yet covered:** the SwiftUI shell (`xcodebuild`) returns with the iOS parity batch.
+
+#### Build time baseline
+
+This is measured before any CI tuning, so later optimisations have a fixed starting point. There are
+two numbers, because a run is only as fast as what it can restore:
+
+- **Cold**: the first run on [#15](https://github.com/Tanvi-Goyal/MINDSET/pull/15) (run `40162039483`). Nothing to
+  restore yet; PR runs only read the cache, never write it.
+- **Warm**: a re-run of [#17](https://github.com/Tanvi-Goyal/MINDSET/pull/17) (run `40164310060`, attempt 2), after
+  `main` saved its Gradle and Kotlin/Native caches. **This is the number to compare optimisations against.**
+
+| Job | Cold total | Cold Gradle step | Warm total | Warm Gradle step |
+|---|---|---|---|---|
+| `android` | 8m 02s | 7m 47s | 3m 00s | 2m 27s |
+| `ios` | 8m 02s | 7m 10s | 3m 12s | 2m 07s |
+| **Wall clock** (jobs run in parallel) | **8m 06s** | | **3m 21s** | |
+
+Caching alone cuts a run by about 60%. Most of a cold run is downloading dependencies and the
+Kotlin/Native toolchain, and recompiling what an earlier run already built.
+
+The starting configuration for those numbers: Gradle build cache and configuration cache on locally,
+`org.gradle.parallel` **off**, the configuration cache not saved between CI runs, and both jobs
+running on every change, including docs-only PRs.
+
 ---
 
 ## Testing
@@ -840,6 +887,7 @@ MindSet/
 ├── benchmark/                  Macrobenchmark (Startup, Scroll) + Baseline Profile generator
 ├── iosApp/                     SwiftUI shell over the shared framework (22 files)
 ├── build-logic/                included build — the KMP library convention plugin
+├── .github/                    CI + release workflows, setup-mindset composite action, Dependabot
 ├── docs/
 │   ├── screenshots/            v1 Android screens (ios-* are the pre-redesign shell)
 │   ├── marketing/              generated campaign images + tester-recruitment copy
@@ -888,7 +936,8 @@ Known limitations — the signals that matter as much as the feature list:
 - **List/Map UI states are not Compose-stable** — needs `kotlinx.collections.immutable`
   (deliberately not papered over with a stability assertion).
 - **LWW can drop a concurrent edit** — see [ADR 3](#adr-3-last-write-wins-over-crdts).
-- **No CI.** There is no `.github/workflows`; assemble + `commonTest` on PR is a Phase 1 leftover.
+- **CI doesn't build the SwiftUI shell yet.** The Android and shared-KMP iOS checks run on every PR
+  (see [CI/CD](#cicd)), but `iosApp/` has fallen behind the shared code and `xcodebuild` returns with the iOS parity batch.
 - **No Health Connect / HealthKit import** — the highest-value next feature, and the best remaining
   "shared vs native" seam. The gym's own app is a Spur.fit white-label with no public API, so
   Health Connect is the integration path rather than a direct one.
