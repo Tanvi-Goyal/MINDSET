@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      # Full history so Spotless's ratchetFrom("origin/main") has a base to compare against.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-mindset
+
+      # Not a real key. It only satisfies verifyReleaseRevenueCatKey (non-blank, not test_) so the
+      # R8 release build runs on every PR, fork PRs included, which never receive secrets.
+      # No keystore.properties here, so the release APK is unsigned by design.
+      - name: Placeholder release config
+        run: echo "revenuecat.apiKey.release=goog_ci_placeholder" > local.properties
+
+      # -x: PR builds are not shipped, so their R8 mappings must not land in Crashlytics.
+      - name: Spotless, unit tests, lint, debug and release builds
+        run: >
+          ./gradlew
+          spotlessCheck
+          testAndroidHostTest
+          :server:test
+          :app:lintDebug
+          :app:assembleDebug
+          :app:assembleRelease
+          -x :app:uploadCrashlyticsMappingFileRelease
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-reports
+          path: |
+            **/build/reports/
+            **/build/test-results/
+          if-no-files-found: ignore
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/*.apk
+
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-mindset
+        with:
+          konan: true
+
+      # Room integration tests (iosTest) + proves Shared.framework's export list still links.
+      - name: iOS tests and framework link
+        run: ./gradlew iosSimulatorArm64Test :shared:linkDebugFrameworkIosSimulatorArm64
+
+      # An xcodebuild step for the SwiftUI shell comes back with the iOS parity batch; iosApp/ has
+      # not tracked the shared code since August.
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-reports
+          path: |
+            **/build/reports/
+            **/build/test-results/
+          if-no-files-found: ignore

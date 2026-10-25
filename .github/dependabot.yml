@@ -1,0 +1,42 @@
+version: 2
+
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      # Kotlin, its compiler plugins (compose, serialization) and KSP move together.
+      kotlin-and-ksp:
+        patterns:
+          - "org.jetbrains.kotlin*"
+          - "com.google.devtools.ksp"
+      # Room-KMP and the bundled SQLite driver ship as a pair.
+      room:
+        patterns:
+          - "androidx.room3*"
+          - "androidx.sqlite*"
+      androidx:
+        patterns:
+          - "androidx.*"
+        update-types: [minor, patch]
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  # The composite action is listed explicitly: "/" alone only scans .github/workflows.
+  - package-ecosystem: github-actions
+    directories:
+      - /
+      - /.github/actions/*
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      actions:
+        patterns: ["*"]

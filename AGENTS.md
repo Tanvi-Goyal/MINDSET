@@ -23,8 +23,8 @@ tools read it directly. Keep it lean — every line must change agent behavior.
     templates, home, auth, onboarding). KMP: ViewModels/MVI state in commonMain,
     Compose screens in androidMain.
   - `:contracts` (shared wire DTOs, client + server) · `:server` (Ktor sync backend) ·
-    `:benchmark` (Macrobenchmark + Baseline Profile). `iosApp/` is a SwiftUI shell at
-    feature parity (shared ViewModels back both platforms).
+    `:benchmark` (Macrobenchmark + Baseline Profile). `iosApp/` is a SwiftUI shell over the
+    shared ViewModels, behind since Aug 2026 (Home widgets, Stations); parity batch pending.
 - Stack: Kotlin 2.4 (K2), Room-KMP, Ktor 3, Koin, Coroutines/Flow, Compose.
   Versions live in `gradle/libs.versions.toml` — read there, never guess.
 - Backend: custom Ktor sync engine (outbox push / cursor pull / LWW / soft

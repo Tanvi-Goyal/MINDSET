@@ -1,0 +1,119 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+# Each job asks for only what it needs.
+permissions: {}
+
+# Job graph: build once, then every destination consumes the same `release` artifact.
+#
+#   build ──► github-release
+#     └─────► publish-play   (not added yet; see the bottom of this file)
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-mindset
+
+      # versionCode is derived from libs.versions.toml, so the toml is the source of truth and the
+      # tag must agree with it, or the GitHub Release and the APK would disagree on the version.
+      - name: Tag must match app version
+        run: |
+          toml=gradle/libs.versions.toml
+          part() { sed -n "s/^app-version$1 = \"\(.*\)\"/\1/p" "$toml"; }
+          expected="$(part Major).$(part Minor).$(part Patch)"
+          if [ "${GITHUB_REF_NAME#v}" != "$expected" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match app version $expected in $toml"
+            exit 1
+          fi
+
+      # Recreates the two gitignored files app/build.gradle.kts reads. Backslashes are escaped
+      # because java.util.Properties treats them as escapes.
+      - name: Write signing and release config
+        env:
+          KEYSTORE_BASE64: ${{ secrets.MINDSET_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.MINDSET_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.MINDSET_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.MINDSET_KEY_PASSWORD }}
+          REVENUECAT_RELEASE_KEY: ${{ secrets.MINDSET_REVENUECAT_RELEASE_KEY }}
+        run: |
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD REVENUECAT_RELEASE_KEY; do
+            if [ -z "${!name}" ]; then echo "::error::Secret MINDSET_$name is not set"; exit 1; fi
+          done
+          esc() { printf '%s' "$1" | sed 's/\\/\\\\/g'; }
+
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/upload.jks"
+            echo "storePassword=$(esc "$KEYSTORE_PASSWORD")"
+            echo "keyAlias=$(esc "$KEY_ALIAS")"
+            echo "keyPassword=$(esc "$KEY_PASSWORD")"
+          } > keystore.properties
+          echo "revenuecat.apiKey.release=$(esc "$REVENUECAT_RELEASE_KEY")" > local.properties
+
+      # Also uploads the R8 mapping to Crashlytics, so shipped stack traces are readable.
+      - name: Build signed release
+        run: ./gradlew :app:bundleRelease :app:assembleRelease
+
+      - name: Verify APK signature
+        run: |
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs app/build/outputs/apk/release/app-release.apk
+
+      # mapping.txt stays a workflow artifact: it is the R8 de-obfuscation key and must not be a
+      # public release asset on a public repo.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release
+          path: |
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/bundle/release/app-release.aab
+            app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: error
+
+  github-release:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: release
+          path: dist
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --generate-notes \
+            dist/apk/release/app-release.apk \
+            dist/bundle/release/app-release.aab
+
+  # Play publishing seam, added when the Play beta starts:
+  #
+  #   publish-play:
+  #     needs: build
+  #     runs-on: ubuntu-latest
+  #     environment: play            # GitHub Environment with a required reviewer = manual gate
+  #     permissions: {}
+  #     steps:
+  #       - uses: actions/download-artifact@v8   # same bytes as the GitHub Release, no rebuild
+  #         with: { name: release, path: dist }
+  #       - upload dist/bundle/release/app-release.aab + dist/mapping/release/mapping.txt to the
+  #         `internal` track, authenticated with secrets.PLAY_SERVICE_ACCOUNT_JSON (scoped to the
+  #         `play` environment). Tool decided then: r0adkll/upload-google-play vs Gradle Play Publisher.
+  #
+  # Signing secrets stay in `build`; Play credentials exist only in `publish-play`.
