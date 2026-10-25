@@ -29,5 +29,14 @@ class MindSetKmpLibraryConventionPlugin : Plugin<Project> {
                 freeCompilerArgs.add("-Xexpect-actual-classes")
             }
         }
+
+        // AGP's hostTest lint tasks read KSP's generated hostTest sources without depending on
+        // kspAndroidHostTest, which Gradle rejects when both run in one build (as on CI).
+        pluginManager.withPlugin("com.google.devtools.ksp") {
+            val lintTasks = setOf("generateAndroidHostTestLintModel", "lintAnalyzeAndroidHostTest")
+            tasks.matching { it.name in lintTasks }.configureEach {
+                dependsOn(tasks.matching { it.name == "kspAndroidHostTest" })
+            }
+        }
     }
 }
