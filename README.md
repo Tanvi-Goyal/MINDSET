@@ -650,12 +650,14 @@ Crash reporting is the *only* telemetry: no ads, no ad IDs, no behavioural analy
 
 ### CI/CD
 
-GitHub Actions, in [`.github/`](.github). Every PR and push to `main` runs [`ci.yml`](.github/workflows/ci.yml);
-pushing a `v*.*.*` tag runs [`release.yml`](.github/workflows/release.yml).
+GitHub Actions, in [`.github/`](.github). Every PR and push to `main` runs [`ci.yml`](.github/workflows/ci.yml)
+(docs-only changes skip it); pushing a `v*.*.*` tag runs [`release.yml`](.github/workflows/release.yml).
+Each CI job publishes a Gradle Build Scan, linked from its job summary.
 
 | Workflow | Job | Runner | What it proves |
 |---|---|---|---|
-| CI | `android` | `ubuntu-latest` | Spotless (ratcheted against `origin/main`), every module's `testAndroidHostTest`, `:server:test`, `:app:lintDebug`, a debug build, and an **R8 release build** on every PR |
+| CI | `android` | `ubuntu-latest` | Spotless (ratcheted against `origin/main`), every module's `testAndroidHostTest`, `:server:test`, `:app:lintDebug`, and a debug build |
+| CI | `release-build` | `ubuntu-latest` | An **R8 release build** on every PR, running in parallel with the other jobs |
 | CI | `ios` | `macos-latest` | Room integration tests in `iosTest` (`iosSimulatorArm64Test`) and that `Shared.framework` still links |
 | Release | `build` → `github-release` | `ubuntu-latest` | Tag matches `libs.versions.toml`, signed AAB + APK, `apksigner verify`, then a GitHub Release |
 
@@ -694,6 +696,31 @@ Kotlin/Native toolchain, and recompiling what an earlier run already built.
 The starting configuration for those numbers: Gradle build cache and configuration cache on locally,
 `org.gradle.parallel` **off**, the configuration cache not saved between CI runs, and both jobs
 running on every change, including docs-only PRs.
+
+#### After the speed-ups ([#18](https://github.com/Tanvi-Goyal/MINDSET/pull/18))
+
+Changes: `org.gradle.parallel=true`, R8 moved into its own `release-build` job, configuration-cache
+saving on CI, Build Scans, and docs-only changes skipping CI. Measured on
+[#19](https://github.com/Tanvi-Goyal/MINDSET/pull/19) (run `40166259607`), a probe PR that edits one
+`commonMain` file in `:feature:history`. That forces a realistic rebuild: the feature module, `:shared`,
+`:app`, R8 and the iOS framework all run again. It ran against warm caches that `main` saved after #18.
+
+| Job | Total | Gradle step | Build Scan |
+|---|---|---|---|
+| `android` | 2m 00s | 1m 30s | [scan](https://gradle.com/s/zhasu7woksuw2) |
+| `release-build` (R8) | 2m 59s | 2m 35s | [scan](https://gradle.com/s/rjdhre2hsuury) |
+| `ios` | 1m 38s | 0m 57s | [scan](https://gradle.com/s/wyysogpnwhtnw) |
+| **Wall clock** | **3m 02s** | | |
+
+- **Faster while doing more.** The warm baseline (3m21s) was a README-only change where almost
+  everything, R8 included, came from the cache. This run had to recompile and re-run R8, and still
+  finished sooner.
+- **iOS gained the most** (3m12s → 1m38s). Parallel builds let Kotlin/Native compile and link several
+  modules at once.
+- **R8 now sets the wall time.** `release-build` is the slowest job, so further gains have to come
+  from R8 itself or from running it less often.
+- **Open item: the configuration cache isn't reused on PRs yet.** `main` saves an entry for every job,
+  but PR runs still report "no cached configuration is available". The cause hasn't been found.
 
 ---
 
