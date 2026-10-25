@@ -18,6 +18,9 @@ plugins {
 }
 
 spotless {
+    // Only files changed relative to main are checked, so existing code gets formatted as it is
+    // touched instead of in one repo-wide reformat. CI checkout needs full history for this.
+    ratchetFrom("origin/main")
     kotlin {
         target("**/*.kt")
         targetExclude("**/build/**/*.kt", "**/.claude/**/*.kt")
