@@ -1,9 +1,12 @@
 name: CI
 
+# Docs-only changes can't break the build, so they skip CI (Spotless's markdown check included).
 on:
   pull_request:
+    paths-ignore: ['docs/**', '**/*.md']
   push:
     branches: [main]
+    paths-ignore: ['docs/**', '**/*.md']
 
 concurrency:
   group: ci-${{ github.ref }}
