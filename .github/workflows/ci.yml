@@ -26,6 +26,7 @@ jobs:
       - uses: ./.github/actions/setup-mindset
         with:
           build-scan: true
+          gradle-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
       # Not a real key. It only satisfies verifyReleaseRevenueCatKey (non-blank, not test_) so the
       # R8 release build runs on every PR, fork PRs included, which never receive secrets.
@@ -72,6 +73,7 @@ jobs:
         with:
           konan: true
           build-scan: true
+          gradle-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
       # Room integration tests (iosTest) + proves Shared.framework's export list still links.
       - name: iOS tests and framework link
