@@ -1,4 +1,6 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
+import org.jetbrains.kotlin.gradle.plugin.mpp.TestExecutable
 
 plugins {
     id("mindset.kmp.library")
@@ -25,6 +27,20 @@ kotlin {
     // to opt in explicitly — without this the iOS compilation fails on the SDK's own signatures.
     sourceSets.named { it.lowercase().startsWith("ios") }.configureEach {
         languageSettings { optIn("kotlinx.cinterop.ExperimentalForeignApi") }
+    }
+
+    // RevenueCat's klib hardcodes its build machine's Xcode path for the Swift back-deploy libs
+    // (swiftCompatibility56, …), so iOS test executables fail to link on any other Xcode install.
+    // Point the linker at the active Xcode instead. Mac-only: Linux CI never links iOS binaries.
+    if (providers.systemProperty("os.name").get().startsWith("Mac")) {
+        val developerDir = providers.exec { commandLine("xcode-select", "-p") }
+            .standardOutput.asText.get().trim()
+        targets.withType<KotlinNativeTarget>().configureEach {
+            val platform = if (name.endsWith("SimulatorArm64")) "iphonesimulator" else "iphoneos"
+            binaries.withType<TestExecutable>().configureEach {
+                linkerOpts("-L$developerDir/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$platform")
+            }
+        }
     }
 
     sourceSets {

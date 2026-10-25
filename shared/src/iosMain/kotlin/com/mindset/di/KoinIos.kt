@@ -11,7 +11,6 @@ import com.mindset.presentation.LogWorkoutViewModel
 import com.mindset.presentation.NewSessionViewModel
 import com.mindset.presentation.PreferencesViewModel
 import com.mindset.presentation.SessionDetailViewModel
-import com.mindset.presentation.StatsViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -36,8 +35,6 @@ fun doInitKoin() {
 fun historyViewModel(): HistoryViewModel = KoinPlatform.getKoin().get()
 
 fun homeViewModel(): HomeViewModel = KoinPlatform.getKoin().get()
-
-fun statsViewModel(): StatsViewModel = KoinPlatform.getKoin().get()
 
 fun preferencesViewModel(): PreferencesViewModel = KoinPlatform.getKoin().get()
 

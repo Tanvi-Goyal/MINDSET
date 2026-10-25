@@ -102,7 +102,8 @@ class SyncEngineTest {
 
     @Test
     fun pulled_soft_delete_hides_row_from_the_observed_list() = runTest {
-        val local = SessionEntity(id = "s1", startedAt = 1, updatedAt = 100, syncStatus = SyncStatus.SYNCED)
+        // Finished, because observeAll() hides empty in-progress sessions.
+        val local = SessionEntity(id = "s1", startedAt = 1, finishedAt = 2, updatedAt = 100, syncStatus = SyncStatus.SYNCED)
         database.sessionDao().upsert(local)
         assertEquals(1, database.sessionDao().observeAll().first().size)
 

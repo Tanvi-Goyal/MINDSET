@@ -1,0 +1,35 @@
+name: Set up MindSet build
+description: >
+  JDK + Gradle caching shared by every workflow, so CI, release and (later) Play publishing all
+  build with the same toolchain. Run after actions/checkout.
+
+inputs:
+  konan:
+    description: Also cache ~/.konan (Kotlin/Native toolchain) for jobs that build iOS targets.
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    # Corretto 21 matches gradle/gradle-daemon-jvm.properties, so Gradle uses this JDK for the
+    # daemon instead of provisioning its own.
+    - uses: actions/setup-java@v6
+      with:
+        distribution: corretto
+        java-version: 21
+
+    - uses: gradle/actions/setup-gradle@v6
+
+    # setup-gradle caches the Gradle user home only; Kotlin/Native's compiler + LLVM live in ~/.konan
+    # and are re-downloaded on every cold run otherwise.
+    - name: Read Kotlin version
+      if: inputs.konan == 'true'
+      id: kotlin
+      shell: bash
+      run: echo "version=$(sed -n 's/^kotlin = "\(.*\)"/\1/p' gradle/libs.versions.toml)" >> "$GITHUB_OUTPUT"
+
+    - if: inputs.konan == 'true'
+      uses: actions/cache@v6
+      with:
+        path: ~/.konan
+        key: konan-${{ runner.os }}-${{ runner.arch }}-${{ steps.kotlin.outputs.version }}

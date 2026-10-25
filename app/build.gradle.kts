@@ -259,12 +259,15 @@ androidComponents {
 val verifyReleaseRevenueCatKey = tasks.register("verifyReleaseRevenueCatKey") {
     group = "verification"
     description = "Fails the build if the release RevenueCat key is missing or is a Test Store key."
+    // Copied to a local so doLast captures a String, not the script object (configuration cache
+    // cannot serialize script references).
+    val releaseKey = revenueCatReleaseKey
     doLast {
-        check(revenueCatReleaseKey.isNotBlank()) {
+        check(releaseKey.isNotBlank()) {
             "Missing `revenuecat.apiKey.release` in local.properties. Add the Play (goog_…) SDK key " +
                 "from RevenueCat → Project Settings → API keys."
         }
-        check(!revenueCatReleaseKey.startsWith("test_")) {
+        check(!releaseKey.startsWith("test_")) {
             "`revenuecat.apiKey.release` is a Test Store key. Test Store purchases are simulated and " +
                 "never reach Play billing — a release built with this key cannot take payment."
         }

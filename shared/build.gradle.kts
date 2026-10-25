@@ -36,6 +36,11 @@ if (profilerEnabled) {
     }
 }
 
+// Same KSP/lint ordering fix as MindSetKmpLibraryConventionPlugin; :shared doesn't apply that plugin.
+tasks.matching { it.name == "generateAndroidHostTestLintModel" || it.name == "lintAnalyzeAndroidHostTest" }.configureEach {
+    dependsOn(tasks.matching { it.name == "kspAndroidHostTest" })
+}
+
 kotlin {
     // Room-KMP generates `actual` objects for @ConstructedBy; the expect/actual-classes feature
     // is still Beta in Kotlin, so opt in explicitly to silence the per-target warning.

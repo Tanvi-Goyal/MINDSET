@@ -74,6 +74,9 @@ class ExerciseImporterTest {
         val metrics = (ExerciseImporter.parse(sample) + ExerciseImporter.supplementalSeed())
             .mapNotNull { it.defaultMetric }
             .toSet()
-        assertEquals(MetricType.entries.map { it.name }.toSet(), metrics, "all capture metrics present")
+        // v1 seeds Hyrox only; CALORIES returns with the conditioning machines (see the phase-2
+        // TODO in SessionRepositoryImpl.ensureSeeded).
+        val expected = (MetricType.entries - MetricType.CALORIES).map { it.name }.toSet()
+        assertEquals(expected, metrics, "all v1 capture metrics present")
     }
 }
