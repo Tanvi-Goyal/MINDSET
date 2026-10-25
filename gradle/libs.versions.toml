@@ -1,5 +1,5 @@
 [versions]
-agp = "9.4.0"
+agp = "9.4.1"
 android-compileSdk = "37"
 android-ndk = "30.0.16138531"   # pinned: AGP's default NDK may differ from what is installed, and
 # a mismatch fails the release build outright. Bump when you update the NDK.
@@ -8,7 +8,7 @@ android-minSdk = "26"    # Context.startForegroundService (RaceTimerService) is 
 android-targetSdk = "36"
 androidx-activity = "1.13.0"
 androidx-appcompat = "1.8.0"
-androidx-core = "1.19.0"
+androidx-core = "1.19.1"
 androidx-espresso = "3.7.0"
 androidx-lifecycle = "2.11.0"
 androidx-testExt = "1.3.0"
@@ -20,28 +20,28 @@ app-versionMinor = "0"
 app-versionPatch = "0"
 composeMultiplatform = "1.12.0"
 junit = "4.13.2"
-kotlin = "2.4.10"
-material3 = "1.11.0-alpha07"
+kotlin = "2.4.21"
+material3 = "1.13.0-alpha02"
 # Phase 0 additions
 ksp = "2.3.11"                 # KSP2 standalone version; changelog confirms Kotlin 2.4.0 support
-room = "3.0.2"                 # Room-KMP; 3.0 moved to androidx.room3 group, enables Paging in commonMain
+room = "3.0.3"                 # Room-KMP; 3.0 moved to androidx.room3 group, enables Paging in commonMain
 androidx-sqlite = "2.7.0"      # BundledSQLiteDriver (androidx.sqlite group — NOT rebranded to room3)
-datastore = "1.2.1"            # AndroidX DataStore (KMP: datastore-preferences-core) for device-local settings
-paging = "3.5.1"               # multiplatform Paging 3 (paging-common/-compose)
+datastore = "1.3.0"            # AndroidX DataStore (KMP: datastore-preferences-core) for device-local settings
+paging = "3.5.3"               # multiplatform Paging 3 (paging-common/-compose)
 navigation = "2.9.2"           # JetBrains multiplatform navigation-compose (aligns with JB Compose)
 koin = "4.2.2"                 # koin-bom
 coroutines = "1.11.0"
-ktor = "3.5.2"                 # Ktor client + server; changelog confirms Kotlin 2.4 compat
-kotlinxSerialization = "1.11.0"
+ktor = "3.6.0"                 # Ktor client + server; changelog confirms Kotlin 2.4 compat
+kotlinxSerialization = "1.12.0"
 # Phase 3 (performance) additions
-benchmark = "1.5.0-rc02"    # Macrobenchmark + baselineprofile; 1.4.1 wants legacy TestExtension (fails on AGP 9's new DSL), and android.newDsl=false isn't an option (our KMP :shared needs the new DSL). This alpha supports AGP 9 natively.
+benchmark = "1.6.0-alpha01"    # Macrobenchmark + baselineprofile; 1.4.1 wants legacy TestExtension (fails on AGP 9's new DSL), and android.newDsl=false isn't an option (our KMP :shared needs the new DSL). This alpha supports AGP 9 natively.
 profileinstaller = "1.4.1"     # installs the baseline profile at runtime (required in the app)
 uiautomator = "2.4.0"          # device gestures for the scroll benchmark
-coil = "3.6.2"                 # Coil 3 (Compose Multiplatform) for lazy exercise image loading
-purchases = "3.8.0"
+coil = "3.6.3"                 # Coil 3 (Compose Multiplatform) for lazy exercise image loading
+purchases = "3.15.0"
 
 kotzilla = "2.3.5"
-spotless = "8.10.2"
+spotless = "8.10.4"
 # Firebase — Crashlytics only. google-services 4.4.1+ is the floor for the Crashlytics v3 plugin.
 googleServices = "4.5.0"
 firebaseCrashlyticsPlugin = "3.0.8"
