@@ -674,15 +674,22 @@ pushing a `v*.*.*` tag runs [`release.yml`](.github/workflows/release.yml).
 
 #### Build time baseline
 
-This is measured before any CI tuning, so later optimisations have a fixed starting point. The first
-run on [#15](https://github.com/Tanvi-Goyal/MINDSET/pull/15) (run `40162039483`, 2026-10-25) used a
-**cold cache**: nothing was restored, and PR runs only read the cache, never write it.
+This is measured before any CI tuning, so later optimisations have a fixed starting point. There are
+two numbers, because a run is only as fast as what it can restore:
 
-| Job | Total | Main Gradle step | Setup + upload |
-|---|---|---|---|
-| `android` | 8m 02s | 7m 47s | ~15s |
-| `ios` | 8m 02s | 7m 10s | ~45s |
-| **Wall clock** (jobs run in parallel) | **8m 06s** | | |
+- **Cold**: the first run on [#15](https://github.com/Tanvi-Goyal/MINDSET/pull/15) (run `40162039483`). Nothing to
+  restore yet; PR runs only read the cache, never write it.
+- **Warm**: a re-run of [#17](https://github.com/Tanvi-Goyal/MINDSET/pull/17) (run `40164310060`, attempt 2), after
+  `main` saved its Gradle and Kotlin/Native caches. **This is the number to compare optimisations against.**
+
+| Job | Cold total | Cold Gradle step | Warm total | Warm Gradle step |
+|---|---|---|---|---|
+| `android` | 8m 02s | 7m 47s | 3m 00s | 2m 27s |
+| `ios` | 8m 02s | 7m 10s | 3m 12s | 2m 07s |
+| **Wall clock** (jobs run in parallel) | **8m 06s** | | **3m 21s** | |
+
+Caching alone cuts a run by about 60%. Most of a cold run is downloading dependencies and the
+Kotlin/Native toolchain, and recompiling what an earlier run already built.
 
 The starting configuration for those numbers: Gradle build cache and configuration cache on locally,
 `org.gradle.parallel` **off**, the configuration cache not saved between CI runs, and both jobs
