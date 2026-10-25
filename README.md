@@ -40,7 +40,7 @@ no sign-in, no analytics in the shipped build.
 - [Offline-first & the sync engine](#offline-first--the-sync-engine)
 - [The KMP seam](#the-kmp-seam) — [code sharing, measured](#code-sharing-measured) · [Flow → Swift](#observing-a-kotlin-stateflow-from-swift)
 - [Performance](#performance)
-- [Build & release engineering](#build--release-engineering) — [CI/CD](#cicd) · [build time baseline](#build-time-baseline)
+- [Build & release engineering](#build--release-engineering) — [CI/CD](#cicd)
 - [Testing](#testing)
 - [Architecture decision records](#architecture-decision-records)
 - [Build & run](#build--run)
@@ -650,77 +650,49 @@ Crash reporting is the *only* telemetry: no ads, no ad IDs, no behavioural analy
 
 ### CI/CD
 
-GitHub Actions, in [`.github/`](.github). Every PR and push to `main` runs [`ci.yml`](.github/workflows/ci.yml)
-(docs-only changes skip it); pushing a `v*.*.*` tag runs [`release.yml`](.github/workflows/release.yml).
-Each CI job publishes a Gradle Build Scan, linked from its job summary.
+GitHub Actions ([`.github/`](.github)): every PR and push to `main` runs [`ci.yml`](.github/workflows/ci.yml),
+and a `v*.*.*` tag runs [`release.yml`](.github/workflows/release.yml).
 
-| Workflow | Job | Runner | What it proves |
+| Job | Runner | Checks |
+|---|---|---|
+| `android` | Linux | Spotless, unit tests (all modules), server tests, lint, debug build |
+| `release-build` | Linux | R8-minified release build |
+| `ios` | macOS | Room integration tests on iOS, `Shared.framework` link |
+| `release` | Linux | Signed AAB + APK, signature check, GitHub Release |
+
+#### Build time
+
+| | Before | After | Change |
 |---|---|---|---|
-| CI | `android` | `ubuntu-latest` | Spotless (ratcheted against `origin/main`), every module's `testAndroidHostTest`, `:server:test`, `:app:lintDebug`, and a debug build |
-| CI | `release-build` | `ubuntu-latest` | An **R8 release build** on every PR, running in parallel with the other jobs |
-| CI | `ios` | `macos-latest` | Room integration tests in `iosTest` (`iosSimulatorArm64Test`) and that `Shared.framework` still links |
-| Release | `build` → `github-release` | `ubuntu-latest` | Tag matches `libs.versions.toml`, signed AAB + APK, `apksigner verify`, then a GitHub Release |
+| **Wall clock** | 3m 21s | **3m 02s** | −9%, despite a full rebuild |
+| iOS job | 3m 12s | **1m 38s** | −49% |
+| Android checks | 3m 00s | **2m 00s** | −33% (R8 moved out) |
 
-- **Fork-safe PR builds.** PRs get no secrets, so CI writes a placeholder `goog_` RevenueCat key. That
-  satisfies `verifyReleaseRevenueCatKey`, so R8 still runs, and the release APK stays unsigned on
-  purpose. PR builds also skip the Crashlytics mapping upload.
-- **Signing rebuilt from secrets.** The release job recreates the gitignored `keystore.properties` and
-  `local.properties` from five `MINDSET_*` secrets on a temporary runner. `mapping.txt` stays a workflow
-  artifact and is never a public release asset.
-- **Shared setup.** A composite action, [`setup-mindset`](.github/actions/setup-mindset/action.yml), installs
-  Corretto 21 (matching `gradle-daemon-jvm.properties`), the Gradle cache and, for iOS jobs, a
-  `~/.konan` cache.
-- **Built to extend.** Release builds once and every destination reuses that one `release` artifact. A
-  `publish-play` job, gated by a GitHub Environment approval, slots in next to `github-release`.
-- **Not yet covered:** the SwiftUI shell (`xcodebuild`) returns with the iOS parity batch.
+*Before: warm cache, README-only change. After: warm cache, a one-line `commonMain` change that forces a
+recompile and a fresh R8 run. With no cache at all, a run took 8m 06s.*
 
-#### Build time baseline
+#### What made it faster
 
-This is measured before any CI tuning, so later optimisations have a fixed starting point. There are
-two numbers, because a run is only as fast as what it can restore:
+- **Caching**: Gradle dependencies, build outputs and the ~1 GB Kotlin/Native toolchain persist
+  between runs, taking a run from 8m 06s to 3m 21s.
+- **Parallel module builds** (`org.gradle.parallel`): independent modules compile at once; the
+  biggest win for iOS.
+- **R8 in its own job**: the slowest Android step runs alongside tests and lint instead of after them.
+- **Docs-only changes skip CI.**
+- **Build Scans on every job**: a public task timeline per run, so the next optimisation is measured,
+  not guessed.
+- **Not used: the configuration cache across runs.** `setup-gradle` carries it between CI runs only
+  with a paid Develocity licence. Configuration takes ~10s per job here, so that's the most it could save.
 
-- **Cold**: the first run on [#15](https://github.com/Tanvi-Goyal/MINDSET/pull/15) (run `40162039483`). Nothing to
-  restore yet; PR runs only read the cache, never write it.
-- **Warm**: a re-run of [#17](https://github.com/Tanvi-Goyal/MINDSET/pull/17) (run `40164310060`, attempt 2), after
-  `main` saved its Gradle and Kotlin/Native caches. **This is the number to compare optimisations against.**
+#### Design choices
 
-| Job | Cold total | Cold Gradle step | Warm total | Warm Gradle step |
-|---|---|---|---|---|
-| `android` | 8m 02s | 7m 47s | 3m 00s | 2m 27s |
-| `ios` | 8m 02s | 7m 10s | 3m 12s | 2m 07s |
-| **Wall clock** (jobs run in parallel) | **8m 06s** | | **3m 21s** | |
-
-Caching alone cuts a run by about 60%. Most of a cold run is downloading dependencies and the
-Kotlin/Native toolchain, and recompiling what an earlier run already built.
-
-The starting configuration for those numbers: Gradle build cache and configuration cache on locally,
-`org.gradle.parallel` **off**, the configuration cache not saved between CI runs, and both jobs
-running on every change, including docs-only PRs.
-
-#### After the speed-ups ([#18](https://github.com/Tanvi-Goyal/MINDSET/pull/18))
-
-Changes: `org.gradle.parallel=true`, R8 moved into its own `release-build` job, configuration-cache
-saving on CI, Build Scans, and docs-only changes skipping CI. Measured on
-[#19](https://github.com/Tanvi-Goyal/MINDSET/pull/19) (run `40166259607`), a probe PR that edits one
-`commonMain` file in `:feature:history`. That forces a realistic rebuild: the feature module, `:shared`,
-`:app`, R8 and the iOS framework all run again. It ran against warm caches that `main` saved after #18.
-
-| Job | Total | Gradle step | Build Scan |
-|---|---|---|---|
-| `android` | 2m 00s | 1m 30s | [scan](https://gradle.com/s/zhasu7woksuw2) |
-| `release-build` (R8) | 2m 59s | 2m 35s | [scan](https://gradle.com/s/rjdhre2hsuury) |
-| `ios` | 1m 38s | 0m 57s | [scan](https://gradle.com/s/wyysogpnwhtnw) |
-| **Wall clock** | **3m 02s** | | |
-
-- **Faster while doing more.** The warm baseline (3m21s) was a README-only change where almost
-  everything, R8 included, came from the cache. This run had to recompile and re-run R8, and still
-  finished sooner.
-- **iOS gained the most** (3m12s → 1m38s). Parallel builds let Kotlin/Native compile and link several
-  modules at once.
-- **R8 now sets the wall time.** `release-build` is the slowest job, so further gains have to come
-  from R8 itself or from running it less often.
-- **Open item: the configuration cache isn't reused on PRs yet.** `main` saves an entry for every job,
-  but PR runs still report "no cached configuration is available". The cause hasn't been found.
+- **Fork-safe PRs**: no secrets needed. A placeholder RevenueCat key keeps R8 running, the release APK
+  stays unsigned, and mappings are never uploaded.
+- **Releases from secrets**: the tag must match the version catalog. Signing config is rebuilt from
+  GitHub secrets on a temporary runner, and `mapping.txt` is never published.
+- **Build once, ship anywhere**: one release artifact feeds every destination. A Play Store job, gated
+  by manual approval, slots in next.
+- **Not yet in CI**: building the SwiftUI shell (`xcodebuild`), which waits on the iOS parity batch.
 
 ---
 
