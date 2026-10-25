@@ -40,7 +40,7 @@ uiautomator = "2.4.0"          # device gestures for the scroll benchmark
 coil = "3.6.2"                 # Coil 3 (Compose Multiplatform) for lazy exercise image loading
 purchases = "3.8.0"
 
-kotzilla = "2.3.5"
+kotzilla = "3.0.1"
 spotless = "8.10.2"
 # Firebase — Crashlytics only. google-services 4.4.1+ is the floor for the Crashlytics v3 plugin.
 googleServices = "4.5.0"
