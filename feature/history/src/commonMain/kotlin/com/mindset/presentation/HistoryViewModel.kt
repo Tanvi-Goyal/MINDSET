@@ -58,6 +58,7 @@ private const val THIRTY_DAYS_MS = 30 * DAY_MS
  * Backs the History tab — reactive from the DB (never the network). The whole-history read powers the
  * streak calendar, PB detection, volumes and the free-tier 30-day list; the Pro list is a separate
  * Paging 3 stream ([pagedSessions]) so the visible list stays cheap for large histories.
+ * CI timing probe: this comment exists only to force a realistic recompile. Not for merge.
  */
 class HistoryViewModel(private val repository: SessionRepository, entitlements: EntitlementRepository) : ViewModel() {
     private val filter = MutableStateFlow(HistoryFilter.ALL)
