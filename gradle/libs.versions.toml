@@ -23,7 +23,7 @@ junit = "4.13.2"
 kotlin = "2.4.10"
 material3 = "1.11.0-alpha07"
 # Phase 0 additions
-ksp = "2.3.11"                 # KSP2 standalone version; changelog confirms Kotlin 2.4.0 support
+ksp = "2.3.12"                 # KSP2 standalone version; changelog confirms Kotlin 2.4.0 support
 room = "3.0.2"                 # Room-KMP; 3.0 moved to androidx.room3 group, enables Paging in commonMain
 androidx-sqlite = "2.7.0"      # BundledSQLiteDriver (androidx.sqlite group — NOT rebranded to room3)
 datastore = "1.2.1"            # AndroidX DataStore (KMP: datastore-preferences-core) for device-local settings
